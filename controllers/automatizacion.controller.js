@@ -201,46 +201,37 @@ export const descargarAutorizacion = async (req, res) => {
           timeout: 30 * 60 * 1000,
         }); // hasta 30 minutos
 
-        const href = await descargarBtn.getAttribute("href");
-        if (!href) {
-          throw new Error("No se pudo obtener el href del botón Descargar");
+        // 🔽 DESCARGA REAL DESDE EL NAVEGADOR (mantiene sesión activa)
+
+        // Esperar descarga real desde el navegador
+        const [download] = await Promise.all([
+          context.waitForEvent("download", { timeout: 30 * 60 * 1000 }), // hasta 30 min
+          descargarBtn.click(), // click en el botón dentro del iframe
+        ]);
+
+        // Obtener stream del archivo descargado
+        const stream = await download.createReadStream();
+
+        if (!stream) {
+          throw new Error("No se pudo obtener el stream de la descarga");
         }
 
-        // URL completa
-        const downloadUrl = `https://enlineawl12.famisanar.com.co:7455${href}`;
-
-        const cookies = await context.cookies();
-
-        const cookieHeader = cookies
-          .map((c) => `${c.name}=${c.value}`)
-          .join("; ");
-
-        const response = await fetch(downloadUrl, {
-          headers: {
-            Cookie: cookieHeader,
-            Accept:
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            "User-Agent":
-              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115 Safari/537.36",
-            Referer: "https://enlinea.famisanar.com.co/",
-          },
-        });
-
-        if (!response.ok) {
-          const text = await response.text();
-          throw new Error(
-            "Error descargando Excel. Respuesta servidor:\n" +
-              text.slice(0, 300),
-          );
+        // Leer el buffer completo
+        const chunks = [];
+        for await (const chunk of stream) {
+          chunks.push(chunk);
         }
 
-        const buffer = await response.arrayBuffer();
+        const finalBuffer = Buffer.concat(chunks);
 
-        // 🔹 PROCESAR EN MEMORIA
-        const dataOriginal = leerExcelDesdeBuffer(buffer);
+        console.log("✅ Excel descargado correctamente desde iframe");
+
+        // Ahora sí puedes procesarlo
+        const dataOriginal = leerExcelDesdeBuffer(finalBuffer);
         const dataTransformada = transformarAutorizaciones(dataOriginal);
         const bufferTransformado = generarExcelBuffer(dataTransformada);
         console.log("✅ Excel transformado generado en memoria");
+
 
         /* ======================
        LOGIN MOZART
