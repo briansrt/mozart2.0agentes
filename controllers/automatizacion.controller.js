@@ -201,33 +201,24 @@ export const descargarAutorizacion = async (req, res) => {
           timeout: 30 * 60 * 1000,
         }); // hasta 30 minutos
 
-        // 🔽 DESCARGA REAL DESDE EL NAVEGADOR (mantiene sesión activa)
+        // ===== Descarga vía fetch dentro del navegador =====
+        const finalBuffer = await frame.evaluate(async (btn) => {
+          const url = btn.href; // href directo del enlace
 
-        // Esperar descarga real desde el navegador
-        const [download] = await Promise.all([
-          context.waitForEvent("download", { timeout: 30 * 60 * 1000 }), // hasta 30 min
-          descargarBtn.click(), // click en el botón dentro del iframe
-        ]);
+          const res = await fetch(url);
+          if (!res.ok) {
+            throw new Error("Error descargando Excel desde iframe, status: " + res.status);
+          }
+          const arrayBuffer = await res.arrayBuffer();
+          return Array.from(new Uint8Array(arrayBuffer)); // se devuelve como array simple
+        }, await descargarBtn.elementHandle());
 
-        // Obtener stream del archivo descargado
-        const stream = await download.createReadStream();
-
-        if (!stream) {
-          throw new Error("No se pudo obtener el stream de la descarga");
-        }
-
-        // Leer el buffer completo
-        const chunks = [];
-        for await (const chunk of stream) {
-          chunks.push(chunk);
-        }
-
-        const finalBuffer = Buffer.concat(chunks);
-
+        // Convertir a Buffer de Node
+        const bufferNode = Buffer.from(finalBuffer);
         console.log("✅ Excel descargado correctamente desde iframe");
 
-        // Ahora sí puedes procesarlo
-        const dataOriginal = leerExcelDesdeBuffer(finalBuffer);
+        // ===== Procesar Excel =====
+        const dataOriginal = leerExcelDesdeBuffer(bufferNode);
         const dataTransformada = transformarAutorizaciones(dataOriginal);
         const bufferTransformado = generarExcelBuffer(dataTransformada);
         console.log("✅ Excel transformado generado en memoria");
