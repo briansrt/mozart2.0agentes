@@ -220,6 +220,9 @@ export const descargarAutorizacion = async (req, res) => {
             Cookie: cookieHeader,
             Accept:
               "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "User-Agent":
+              "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115 Safari/537.36",
+            Referer: "https://enlinea.famisanar.com.co/",
           },
         });
 
