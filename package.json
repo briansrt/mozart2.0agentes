@@ -1,0 +1,32 @@
+{
+  "name": "mozart2.0agentes",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node --watch index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MozartCuidadorDigital/mozart2.0agentes.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/MozartCuidadorDigital/mozart2.0agentes/issues"
+  },
+  "homepage": "https://github.com/MozartCuidadorDigital/mozart2.0agentes#readme",
+  "dependencies": {
+    "@aws-sdk/client-connect": "^3.947.0",
+    "@hyperbrowser/sdk": "^0.83.0",
+    "axios": "^1.12.2",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "moment-timezone": "^0.6.0",
+    "playwright-core": "^1.58.2",
+    "xlsx": "^0.18.5"
+  }
+}
