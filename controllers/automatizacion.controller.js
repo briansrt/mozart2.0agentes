@@ -38,7 +38,7 @@ async function seleccionarPorTexto(selector, texto, page) {
 
 async function seleccionarSedeHumana(selector, sede, page) {
   const mapa = {
-    centro: "manejo de la diabetes s.a.s - cemdi sas",
+    principal: "manejo de la diabetes s.a.s - cemdi sas",
     suba: "sede suba",
     sur: "sede sur",
   };
