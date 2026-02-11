@@ -18,7 +18,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # ✅ Copiamos el archivo .env al contenedor (como tú siempre lo usas)
-COPY .env .env
+
 
 # ✅ Puerto donde escucha tu app (corregido)
 EXPOSE 4000
