@@ -89,7 +89,7 @@ async function seleccionarTreeSelectConBuscador(page, selector, texto) {
 
   await inputBusqueda.click();
   await inputBusqueda.clear();
-  await inputBusqueda.pressSequentially(texto, { delay: 2 });
+  await inputBusqueda.pressSequentially(texto, { delay: 100 });
 
   await page.waitForTimeout(800);
 
@@ -127,7 +127,7 @@ async function seleccionarTipoSolicitud(page, selector, texto, textoPadre = null
 
   await inputBusqueda.click();
   await inputBusqueda.clear();
-  await inputBusqueda.pressSequentially(texto, { delay: 5 });
+  await inputBusqueda.pressSequentially(texto, { delay: 100 });
 
   await page.waitForTimeout(1000);
 
