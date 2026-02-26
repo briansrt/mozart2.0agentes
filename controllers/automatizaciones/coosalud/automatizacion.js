@@ -91,7 +91,7 @@ async function seleccionarTreeSelectConBuscador(page, selector, texto) {
   await inputBusqueda.clear();
   await inputBusqueda.pressSequentially(texto, { delay: 100 });
 
-  await page.waitForTimeout(800);
+  await page.waitForTimeout(2000);
 
   const todasOpciones = dropdown.locator('.inputMultipleSelectOptionTitle');
   const count = await todasOpciones.count();
