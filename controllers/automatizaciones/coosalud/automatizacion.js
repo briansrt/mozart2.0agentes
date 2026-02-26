@@ -127,9 +127,9 @@ async function seleccionarTipoSolicitud(page, selector, texto, textoPadre = null
 
   await inputBusqueda.click();
   await inputBusqueda.clear();
-  await inputBusqueda.pressSequentially(texto, { delay: 100 });
+  await inputBusqueda.pressSequentially(texto, { delay: 150 });
 
-  await page.waitForTimeout(1000);
+  await page.waitForTimeout(2000);
 
   const todasOpciones = dropdown.locator('.inputMultipleSelectOption');
   const count = await todasOpciones.count();
