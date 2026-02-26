@@ -18,3 +18,19 @@ export const transformarAutorizaciones = (data) => {
     };
   });
 };
+
+
+export const transformarAutorizacionesGuajira = (filaTabla) => {
+  if (!filaTabla?.autorizaciones?.length) return [];
+
+  return filaTabla.autorizaciones.map((aut) => ({
+    "Cédula *": filaTabla.cedula || "",
+    "Nombres *": filaTabla.nombres || "",
+    "Fecha de Expedición *": aut.fechaExpedicion || "",
+    "Servicio *": aut.servicio || "",
+    "Número de Autorización": aut.numeroAutorizacion || "",
+    "Número de Radicación *": aut.numeroRadicacion || "",
+    "Observaciones": "", // Ya no estás trayendo detalles
+    "Agendada": false
+  }));
+};

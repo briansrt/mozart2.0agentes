@@ -22,6 +22,8 @@
   "dependencies": {
     "@aws-sdk/client-connect": "^3.947.0",
     "@hyperbrowser/sdk": "^0.83.0",
+    "@sendgrid/mail": "^8.1.6",
+    "adm-zip": "^0.5.16",
     "axios": "^1.12.2",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",

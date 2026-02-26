@@ -1,11 +1,10 @@
 import dotenv from "dotenv";
 import { Hyperbrowser } from "@hyperbrowser/sdk";
 import { chromium } from "playwright-core";
+import { leerExcelDesdeBuffer } from "../../../utils/excel/leerExcel.js";
+import { transformarAutorizaciones } from "../../../utils/excel/transformarAutorizaciones.js";
+import { generarExcelBuffer } from "../../../utils/excel/escribirExcel.js";
 import moment from "moment-timezone";
-import { leerExcelDesdeBuffer } from "../utils/excel/leerExcel.js";
-import { transformarAutorizaciones } from "../utils/excel/transformarAutorizaciones.js";
-import { generarExcelBuffer } from "../utils/excel/escribirExcel.js";
-import fetch from "node-fetch";
 
 dotenv.config();
 
@@ -16,6 +15,7 @@ let pageMozartia;
 const client = new Hyperbrowser({
   apiKey: process.env.HYPERBROWSER_API_KEY,
 });
+
 
 async function seleccionarPorTexto(selector, texto, page) {
   const value = await page.$eval(
@@ -95,6 +95,8 @@ async function seleccionarFechaVuetify(frame, inputSelector, fecha) {
     .first()
     .click({ force: true });
 }
+
+// AUTORIZACIONES FAMISANAR
 
 export const descargarAutorizacion = async (req, res) => {
   const { usuario, clave, sede, fechaInicio, fechaFin, tenant } = req.body;
@@ -202,16 +204,21 @@ export const descargarAutorizacion = async (req, res) => {
         }); // hasta 30 minutos
 
         // ===== Descarga vía fetch dentro del navegador =====
-        const finalBuffer = await frame.evaluate(async (btn) => {
-          const url = btn.href; // href directo del enlace
+        const finalBuffer = await frame.evaluate(
+          async (btn) => {
+            const url = btn.href; // href directo del enlace
 
-          const res = await fetch(url);
-          if (!res.ok) {
-            throw new Error("Error descargando Excel desde iframe, status: " + res.status);
-          }
-          const arrayBuffer = await res.arrayBuffer();
-          return Array.from(new Uint8Array(arrayBuffer)); // se devuelve como array simple
-        }, await descargarBtn.elementHandle());
+            const res = await fetch(url);
+            if (!res.ok) {
+              throw new Error(
+                "Error descargando Excel desde iframe, status: " + res.status,
+              );
+            }
+            const arrayBuffer = await res.arrayBuffer();
+            return Array.from(new Uint8Array(arrayBuffer)); // se devuelve como array simple
+          },
+          await descargarBtn.elementHandle(),
+        );
 
         // Convertir a Buffer de Node
         const bufferNode = Buffer.from(finalBuffer);
@@ -222,7 +229,6 @@ export const descargarAutorizacion = async (req, res) => {
         const dataTransformada = transformarAutorizaciones(dataOriginal);
         const bufferTransformado = generarExcelBuffer(dataTransformada);
         console.log("✅ Excel transformado generado en memoria");
-
 
         /* ======================
        LOGIN MOZART
