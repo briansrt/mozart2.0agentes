@@ -343,23 +343,27 @@ export const CrearPQRSCoosalud = async (req, res) => {
 
     const botonEnviar = page.locator('#submit_button');
     await botonEnviar.waitFor({ state: 'visible' });
-    await Promise.all([
-      page.waitForNavigation({ waitUntil: 'networkidle' }),
-      botonEnviar.click()
-    ]);
+    // await Promise.all([
+    //   page.waitForNavigation({ waitUntil: 'networkidle' }),
+    //   botonEnviar.click()
+    // ]);
 
-    await page.waitForSelector('.requestViewId');
-    const requestId = await page.getAttribute('.requestViewId', 'data-id');
-    console.log('ID de la solicitud:', requestId);
+    // await page.waitForSelector('.requestViewId');
+    // const requestId = await page.getAttribute('.requestViewId', 'data-id');
+    // console.log('ID de la solicitud:', requestId);
 
-    // ✅ Responder con el radicado generado
+    // // ✅ Responder con el radicado generado
+    // return res.status(200).json({
+    //   idNumber,
+    //   estado: "completado",
+    //   radicado: requestId,
+    //   motivo: `PQRS creado con el número radicado: ${requestId}`,
+    //   timestamp: new Date().toISOString()
+    // });
     return res.status(200).json({
       idNumber,
-      estado: "completado",
-      radicado: requestId,
-      motivo: `PQRS creado con el número radicado: ${requestId}`,
-      timestamp: new Date().toISOString()
-    });
+      estado: "Datos puestos en el formulario"
+    })
 
   } catch (error) {
     console.error("❌ Error en proceso:", error);
