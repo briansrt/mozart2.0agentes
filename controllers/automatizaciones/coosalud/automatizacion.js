@@ -97,7 +97,7 @@ async function seleccionarTreeSelectConBuscador(page, selector, texto) {
   await inputBusqueda.clear();
   await inputBusqueda.pressSequentially(texto, { delay: 100 });
 
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(1500);
 
   const todasOpciones = dropdown.locator('.inputMultipleSelectOptionTitle');
   const count = await todasOpciones.count();
@@ -133,9 +133,9 @@ async function seleccionarTipoSolicitud(page, selector, texto, textoPadre = null
 
   await inputBusqueda.click();
   await inputBusqueda.clear();
-  await inputBusqueda.pressSequentially(texto, { delay: 150 });
+  await inputBusqueda.pressSequentially(texto, { delay: 100 });
 
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(1500);
 
   const todasOpciones = dropdown.locator('.inputMultipleSelectOption');
   const count = await todasOpciones.count();
