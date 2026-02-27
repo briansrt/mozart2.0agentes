@@ -3,8 +3,14 @@ import { Hyperbrowser } from "@hyperbrowser/sdk";
 import { chromium } from "playwright-core";
 import { guardarResultadoEnCache, obtenerResultadoDeCache } from '../../../utils/memoryCache.js';
 import { envioSolicitudCita } from '../../../config/twilio.js';
+import { leerExcel } from '../../../utils/excel/leerExcel.js'
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 let browser, page, session;
 let contextGlobal;
@@ -249,19 +255,14 @@ export const CrearPQRSCoosalud = async (req, res) => {
 
   const tipoCanalRecepcion = "Canal";
   const canalRecepcion = "Línea";
-  const profileId = process.env.profileIdCoosalud
+  const profileId = process.env.profileIdCoosalud;
   const ipsInductora = "NO APLICA";
 
+  let session;
+  let browser;
+
   try {
-    await guardarResultadoEnCache(idNumber, {
-      idNumber: idNumber,
-      estado: "procesando",
-      motivo: "Creando PQRS...",
-      radicado: null,
-      timestamp: new Date().toISOString()
-    });
-    // Intentar con el perfil existente
-    let session = await client.sessions.create({ 
+    session = await client.sessions.create({ 
       acceptCookies: true,
       saveDownloads: true,
       profile: {
@@ -270,180 +271,122 @@ export const CrearPQRSCoosalud = async (req, res) => {
       }
     });
 
-    res.status(200).json({
-      mensaje: "Estoy creando la PQRS, un momento por favor...",
-      liveUrl: session.liveUrl,
-      estado: "procesando",
-      idNumber: idNumber
+    browser = await chromium.connectOverCDP(session.wsEndpoint);
+    let context = browser.contexts()[0];
+    let page = context.pages()[0];
+
+    await page.goto(
+      "https://coosalud.sd.cloud.invgate.net/auth/login/type/servicedesk",
+      { waitUntil: 'networkidle' }
+    );
+
+    const sesionExpirada = await detectarSesionExpiradaCoosalud(page);
+
+    if (sesionExpirada) {
+      console.log("⚠️ Sesión expirada - Renovando perfil...");
+      await browser.close();
+      await client.sessions.stop(session.id);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      session = await client.sessions.create({ 
+        acceptCookies: true,
+        saveDownloads: true,
+        profile: {
+          id: profileId,
+          persistChanges: true,
+        }
+      });
+
+      browser = await chromium.connectOverCDP(session.wsEndpoint);
+      context = browser.contexts()[0];
+      page = context.pages()[0];
+      
+      await page.goto("https://coosalud.sd.cloud.invgate.net/auth/login/type/servicedesk");
+      await page.locator('a.button.button--auto', { hasText: 'Funcionarios Coosalud' }).click();
+      await page.waitForLoadState('networkidle');
+    }
+
+    await page.waitForSelector('#new_incident', { timeout: 15000 });
+    await page.click('#new_incident');
+
+    await page.waitForSelector('[data-value="243"]');
+    await page.click('[data-value="243"]');
+
+    await page.waitForSelector('.createRequestButton[data-category="243"]');
+    await page.click('.createRequestButton[data-category="243"]');
+
+    await page.waitForSelector('.requestCreatePriority', { 
+      state: 'visible',
+      timeout: 20000
     });
 
-    (async () => {
+    await seleccionarSelectPorTexto(page, '#form_create_priority', prioridad);
+    await seleccionarSelectPorTexto(page, '#custom_field_44479', riesgoVital);
+    await seleccionarSelectPorTexto(page, '#custom_field_44480', priorizado);
+    await seleccionarSelectPorTexto(page, '#custom_field_44471', regimen);
+    await seleccionarSelectPorTexto(page, '#custom_field_46454', sucursal);
+    await seleccionarTreeSelectConBuscador(page, '#custom_field_46455', municipioResidencia);
+    await seleccionarTipoSolicitud(page, '#custom_field_44469', codigoMotivo, entidadSolicitud);
+    await seleccionarTipoSolicitud(page, '#custom_field_44752', canalRecepcion, tipoCanalRecepcion);
+    await seleccionarSelectPorTexto(page, '#custom_field_46457', tipoDocumento);
+    await page.fill('#custom_field_44464', idNumber);
+    await page.fill('#custom_field_46453', nombre);
+    await page.fill('#custom_field_44467', telefono);
+    await page.fill('#custom_field_44468', correo);
+    await seleccionarSelectPorTexto(page, '#custom_field_46464', ipsInductora);
+    await page.fill('#form_create_subject', asuntoLimpio);
+    
+    await page.waitForSelector('iframe.cke_wysiwyg_frame', { timeout: 10000 });
+    const frame = await (await page.waitForSelector('iframe.cke_wysiwyg_frame')).contentFrame();
+    await frame.waitForSelector('body');
+    await frame.fill('body', descripcionFinal);
 
-      let numeroRadicado = {
-        idNumber: idNumber,
-        estado: "procesando",
-        radicado: false,
-        motivo: "",
-        timestamp: new Date().toISOString()
-      };
+    const botonEnviar = page.locator('#submit_button');
+    await botonEnviar.waitFor({ state: 'visible' });
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle' }),
+      botonEnviar.click()
+    ]);
 
-      try {
-        let browser = await chromium.connectOverCDP(session.wsEndpoint);
-        let context = browser.contexts()[0];
-        let page = context.pages()[0];
+    await page.waitForSelector('.requestViewId');
+    const requestId = await page.getAttribute('.requestViewId', 'data-id');
+    console.log('ID de la solicitud:', requestId);
 
-        await page.goto(
-          "https://coosalud.sd.cloud.invgate.net/auth/login/type/servicedesk",
-          { waitUntil: 'networkidle' }
-        );
-
-        const sesionExpirada = await detectarSesionExpiradaCoosalud(page);
-
-        if (sesionExpirada) {
-          console.log("⚠️ Sesión expirada - Renovando perfil...");
-          
-          // 🔄 Cerrar sesión actual
-          await browser.close();
-          await client.sessions.stop(session.id);
-
-          // ⏳ Esperar 2 segundos para que se libere el perfil
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          // 🆕 NUEVA SESIÓN CON persistChanges: true para actualizar perfil
-          session = await client.sessions.create({ 
-            acceptCookies: true,
-            saveDownloads: true,
-            profile: {
-              id: profileId,
-              persistChanges: true, // 🔑 Ahora sí guardamos cambios
-            }
-          });
-
-          browser = await chromium.connectOverCDP(session.wsEndpoint);
-          context = browser.contexts()[0];
-          page = context.pages()[0];
-          
-          await page.goto(
-            "https://coosalud.sd.cloud.invgate.net/auth/login/type/servicedesk"
-          );
-
-          // Re-login
-          await page.locator('a.button.button--auto', { hasText: 'Funcionarios Coosalud' }).click();
-
-          await page.waitForLoadState('networkidle');
-
-          console.log("✅ Perfil renovado con nueva sesión");
-        }
-
-        // Continuar con el flujo normal
-        console.log("liveurl: ", session.liveUrl)
-
-        await page.waitForSelector('#new_incident', { timeout: 15000 });
-        await page.click('#new_incident');
-
-        await page.waitForSelector('[data-value="243"]');
-        await page.click('[data-value="243"]');
-
-        await page.waitForSelector('.createRequestButton[data-category="243"]');
-        await page.click('.createRequestButton[data-category="243"]');
-
-        await page.waitForSelector('.requestCreatePriority', { 
-          state: 'visible',
-          timeout: 20000
-        });
-
-        //Formulario
-        await seleccionarSelectPorTexto(page, '#form_create_priority', prioridad);
-        await seleccionarSelectPorTexto(page, '#custom_field_44479', riesgoVital);
-        await seleccionarSelectPorTexto(page, '#custom_field_44480', priorizado);
-        await seleccionarSelectPorTexto(page, '#custom_field_44471', regimen);
-        await seleccionarSelectPorTexto(page, '#custom_field_46454', sucursal);
-        await seleccionarTreeSelectConBuscador(page, '#custom_field_46455', municipioResidencia);
-        await seleccionarTipoSolicitud(page, '#custom_field_44469', codigoMotivo, entidadSolicitud);
-        await seleccionarTipoSolicitud(page, '#custom_field_44752', canalRecepcion, tipoCanalRecepcion);
-        await seleccionarSelectPorTexto(page, '#custom_field_46457', tipoDocumento);
-        await page.fill('#custom_field_44464', idNumber);
-        await page.fill('#custom_field_46453', nombre);
-        await page.fill('#custom_field_44467', telefono);
-        await page.fill('#custom_field_44468', correo);
-        await seleccionarSelectPorTexto(page, '#custom_field_46464', ipsInductora);
-        await page.fill('#form_create_subject', asuntoLimpio);
-        
-        await page.waitForSelector('iframe.cke_wysiwyg_frame', { timeout: 10000 });
-        const frame = await (
-          await page.waitForSelector('iframe.cke_wysiwyg_frame')
-        ).contentFrame();
-        await frame.waitForSelector('body');
-        await frame.fill('body', descripcionFinal);
-
-        const botonEnviar = page.locator('#submit_button');
-        await botonEnviar.waitFor({ state: 'visible' });
-        await Promise.all([
-          page.waitForNavigation({ waitUntil: 'networkidle' }),
-          botonEnviar.click()
-        ]);
-
-        await page.waitForSelector('.requestViewId');
-
-        const requestId = await page.getAttribute('.requestViewId', 'data-id');
-        console.log('ID de la solicitud:', requestId);
-
-        if (sesionExpirada) {
-          await client.sessions.stop(session.id);
-        }
-
-        numeroRadicado = {
-         idNumber:idNumber,
-          estado: "completado",
-          radicado: requestId,
-          motivo: `PQRS Creado con el numero radicado: ${requestId}`,
-          timestamp: new Date().toISOString()
-        };
-        
-        // Guardar resultado final en cache
-        await guardarResultadoEnCache(idNumber, numeroRadicado);
-                
-        console.log(`✅ Proceso completado para documento ${idNumber}`);
-
-      } catch (error) {
-        console.error("Error en proceso:", error);
-        numeroRadicado = {
-          idNumber: idNumber,
-          estado: "error",
-          radicado: false,
-          motivo: "Error al procesar la solicitud",
-          error: error.message,
-          timestamp: new Date().toISOString()
-        };
-                
-        // Guardar error en cache
-        await guardarResultadoEnCache(idNumber, numeroRadicado);
-      } finally {
-        console.log("🔒 Cerrando sesión Hyperbrowser...");
-
-        try {
-          if (browser) {
-            await browser.close();
-          }
-        } catch (e) {
-          console.log("Error cerrando browser:", e.message);
-        }
-
-        console.log("✅ Sesión cerrada correctamente");
-      }
-    })();
+    // ✅ Responder con el radicado generado
+    return res.status(200).json({
+      idNumber,
+      estado: "completado",
+      radicado: requestId,
+      motivo: `PQRS creado con el número radicado: ${requestId}`,
+      timestamp: new Date().toISOString()
+    });
 
   } catch (error) {
-    console.error("❌ Error:", error.message);
+    console.error("❌ Error en proceso:", error);
+    return res.status(500).json({
+      idNumber,
+      estado: "error",
+      radicado: null,
+      motivo: "Error al procesar la solicitud",
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
 
-    if (!res.headersSent) {
-      res.status(500).json({
-        mensaje: "Error al iniciar el proceso",
-        error: error.message,
-      });
+  } finally {
+    console.log("🔒 Cerrando sesión Hyperbrowser...");
+    try {
+      if (browser) await browser.close();
+    } catch (e) {
+      console.log("Error cerrando browser:", e.message);
+    }
+    try {
+      if (session) await client.sessions.stop(session.id);
+      console.log("✅ Sesión cerrada correctamente");
+    } catch (e) {
+      console.log("Error cerrando sesión:", e.message);
     }
   }
-}
+};
 
 
 export const ConsultarRadicadoPQRS = async (req, res) => {
@@ -486,44 +429,110 @@ export const ConsultarRadicadoPQRS = async (req, res) => {
 
 
 //Enviar Correo
-export const enviarCorreo = async (req, res) => {
+// Construye el mapa IPS -> correo desde el directorio
+const cargarDirectorio = () => {
+  const dirPath = path.join(__dirname, '../../../data/DIRECTORIO_CORREO_BACK_DE_CITASV.xlsx');
+  const rows = leerExcel(dirPath);
+
+  const mapa = {};
+  for (const row of rows) {
+    const prestador = row['PRESTADOR']?.toString().trim().toUpperCase();
+    const correo = row['CORREO']?.toString().trim();
+    if (prestador && correo) {
+      mapa[prestador] = correo;
+    }
+  }
+  return mapa;
+};
+
+const normalizarNombre = (nombre) => {
+  return nombre
+    .toString()
+    .trim()
+    .toUpperCase()
+    .replace(/\bS\.A\.S\.?\b/g, '')
+    .replace(/\bS\.A\.?\b/g, '')
+    .replace(/\bLTDA\.?\b/g, '')
+    .replace(/\bIPS\b/g, '')
+    .replace(/\bE\.S\.E\.?\b/g, '')
+    .replace(/[^A-Z0-9\s]/g, '')  // quita puntuación
+    .replace(/\s+/g, ' ')          // espacios dobles
+    .trim();
+};
+
+// Búsqueda exacta primero, luego normalizada (quita puntuación/espacios extra)
+const buscarCorreo = (ipsAtencion, directorio) => {
+  const key = ipsAtencion?.toString().trim().toUpperCase();
+  if (!key) return null;
+
+  // 1. Exacto
+  if (directorio[key]) return directorio[key];
+
+  // 2. Normalizado (sin puntuación)
+  const keyNorm = key.replace(/[^A-Z0-9]/g, '');
+  const matchNorm = Object.keys(directorio).find(k =>
+    k.replace(/[^A-Z0-9]/g, '') === keyNorm
+  );
+  if (matchNorm) return directorio[matchNorm];
+
+  // 3. Sin sufijos legales
+  const keyClean = normalizarNombre(key);
+  const matchClean = Object.keys(directorio).find(k =>
+    normalizarNombre(k) === keyClean
+  );
+  if (matchClean) return directorio[matchClean];
+
+  return null;
+};
+
+export const enviarCorreosDesdeExcel = async (req, res) => {
   try {
-    const {
-      nombrePaciente,
-      tipoDocumento,
-      idNumber,
-      edad,
-      telefono,
-      grupoRiesgo,
-      servicio,
-      ipsAtencion,
-      numeroCaso
-    } = req.body;
+    const directorio = cargarDirectorio();
 
-    const email="brian.riofrio@mozartai.com.co"
+    const citasPath = path.join(__dirname, '../../../data/asignacionCitas.xlsx');
+    const citas = leerExcel(citasPath);
 
-    if (!email) {
-      return res.status(400).json({ error: "Falta el campo email" });
+    const resultados = [];
+
+    for (const cita of citas) {
+      const ipsAtencion = cita['Nombre de la IPS de atención'];
+      const email = buscarCorreo(ipsAtencion, directorio);
+
+      if (!email) {
+        resultados.push({ 
+          caso: cita['Numero de caso'], 
+          status: 'sin_correo', 
+          ips: ipsAtencion 
+        });
+        continue;
+      }
+
+      const dataPaciente = {
+        nombrePaciente: cita['Nombre del afiliado'],
+        tipoDocumento:  cita['Tipo de documento del afiliado'],
+        idNumber:       cita['Numero de documento del afiliado'],
+        edad:           cita['Edad'],
+        telefono:       cita['CELULAR'],
+        grupoRiesgo:    cita['Código de diagnóstico'],
+        servicio:       cita['Descripción del servicio'],
+        ipsAtencion,
+        numeroCaso:     cita['Numero de caso'],
+      };
+
+      const emailPrueba = "brian.riofrio@mozartai.com.co";
+      await envioSolicitudCita(emailPrueba, dataPaciente);
+      resultados.push({ 
+        caso: cita['Numero de caso'], 
+        status: 'enviado', 
+        email: emailPrueba, 
+        ips: ipsAtencion 
+      });
     }
 
-    const dataPaciente = {
-      nombrePaciente,
-      tipoDocumento,
-      idNumber,
-      edad,
-      telefono,
-      grupoRiesgo,
-      servicio,
-      ipsAtencion,
-      numeroCaso
-    };
+    res.json({ message: 'Proceso completado', resultados });
 
-    // Llamada a la función que envía el correo
-    await envioSolicitudCita(email, dataPaciente);
-
-    res.json({ message: "Correo enviado correctamente" });
   } catch (error) {
-    console.error("Error enviando correo:", error);
-    res.status(500).json({ error: "Error enviando correo" });
+    console.error('Error procesando Excel:', error);
+    res.status(500).json({ error: 'Error procesando el Excel' });
   }
 };
