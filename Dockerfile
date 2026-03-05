@@ -8,6 +8,11 @@ RUN apk add --no-cache python3 make g++ qpdf \
     jpeg-dev \
     giflib-dev \
     pixman-dev \
+    cairo \
+    pango \
+    libjpeg-turbo \
+    giflib \
+    pixman \
   && ln -sf python3 /usr/bin/python
 COPY package*.json ./
 RUN npm ci
