@@ -23,6 +23,9 @@ FROM node:18-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
+# Agregar librerías runtime de cairo
+RUN apk add --no-cache qpdf cairo pango libjpeg-turbo giflib pixman
+
 # Copiamos node_modules ya resueltas
 COPY --from=deps /app/node_modules ./node_modules
 
