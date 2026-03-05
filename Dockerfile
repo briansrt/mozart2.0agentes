@@ -16,6 +16,7 @@ RUN apk add --no-cache python3 make g++ qpdf \
   && ln -sf python3 /usr/bin/python
 COPY package*.json ./
 RUN npm ci
+RUN npm rebuild canvas --build-from-source
 
 # ========== Runner ==========
 FROM node:18-alpine AS runner
