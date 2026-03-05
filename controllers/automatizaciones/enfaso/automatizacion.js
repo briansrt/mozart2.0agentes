@@ -3,16 +3,18 @@ import { Hyperbrowser } from "@hyperbrowser/sdk";
 import { chromium } from "playwright-core";
 import moment from "moment-timezone";
 import fetch from "node-fetch";
-import fs from "fs";
-import path from "path"
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
-import { fileURLToPath } from 'url';
+import canvas from 'canvas';
+const { DOMMatrix, ImageData } = canvas;
+globalThis.DOMMatrix = DOMMatrix;
+globalThis.ImageData = ImageData;
+globalThis.Path2D = globalThis.Path2D || class Path2D {};
+
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
 
 dotenv.config();
 
-let browser, page, session;
-let contextGlobal;
-let pageMozartia;
 
 const client = new Hyperbrowser({
   apiKey: process.env.HYPERBROWSER_API_KEY,
@@ -1119,9 +1121,11 @@ export const AutorizacionColpatria = async (req, res) => {
 
         const arrayBuffer = await downloadResp.arrayBuffer();
 
-        const pdfDoc = await pdfjsLib.getDocument({ 
+        const pdfDoc = await pdfjsLib.getDocument({
           data: new Uint8Array(arrayBuffer),
-          password: documento
+          password: documento,
+          useSystemFonts: true,
+          disableFontFace: true,
         }).promise;
 
         let fullText = '';
