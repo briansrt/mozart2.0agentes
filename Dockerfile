@@ -1,7 +1,7 @@
 # ========== Dependencias ==========
 FROM node:18-alpine AS deps
 WORKDIR /app
-RUN apk add --no-cache python3 make g++ \
+RUN apk add --no-cache python3 make g++ qpdf \
   && ln -sf python3 /usr/bin/python
 COPY package*.json ./
 RUN npm ci
