@@ -271,7 +271,7 @@ export const descargarAutorizacion = async (req, res) => {
         await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
 
         await pageMozartia.goto(
-          "https://new.app.mozartia.com/cemdiprueba/medical-authorizations",
+          `https://new.app.mozartia.com/${tenant}/medical-authorizations`,
           { waitUntil: "networkidle" },
         );
 
