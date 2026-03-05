@@ -540,3 +540,12 @@ export const enviarCorreosDesdeExcel = async (req, res) => {
     res.status(500).json({ error: 'Error procesando el Excel' });
   }
 };
+
+
+export const recibirCorreo = async (req, res) => {
+  const {sujeto, body} = req.body
+
+  console.log("sujeto recibido: ", sujeto)
+
+  console.log("Body recibido: ", body)
+}

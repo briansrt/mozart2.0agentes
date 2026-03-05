@@ -4,6 +4,9 @@ import { chromium } from "playwright-core";
 import moment from "moment-timezone";
 import fetch from "node-fetch";
 import fs from "fs";
+import path from "path"
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { fileURLToPath } from 'url';
 
 dotenv.config();
 
@@ -16,27 +19,39 @@ const client = new Hyperbrowser({
 });
 
 
-
-export const AutorizacionEnfaso = async (req, res) => {
-  const { usuario, clave, tipoConsulta, tipoDocumento, documento, numAutorizacion } = req.body;
+export const AutorizacionEnfasoInicial = async (req, res) => {
+  const { usuario, clave, documento } = req.body;
 
   try {
-    // Crear sesión
-    session = await client.sessions.create({ acceptCookies: true });
+    // 1️⃣ Crear un perfil nuevo
+    const profile = await client.profiles.create({
+      name: `enfaso-${usuario}`, // Nombre único por usuario
+    });
+
+    console.log("✅ Perfil creado:", profile.id);
+
+    // 2️⃣ Crear sesión CON el perfil y persistChanges: true
+    const session = await client.sessions.create({ 
+      acceptCookies: true,
+      profile: {
+        id: profile.id,
+        persistChanges: true, // 🔑 IMPORTANTE: Guarda el estado del navegador
+      }
+    });
 
     res.status(200).json({
-      mensaje: "Proceso iniciado",
+      mensaje: "Proceso iniciado - Guardando perfil",
       liveUrl: session.liveUrl,
+      profileId: profile.id, // 📌 Retorna el ID para guardarlo
     });
 
     console.log("preview:", session.liveUrl);
 
-    // Proceso asíncrono en segundo plano
     (async () => {
       try {
-        browser = await chromium.connectOverCDP(session.wsEndpoint);
+        const browser = await chromium.connectOverCDP(session.wsEndpoint);
         const context = browser.contexts()[0];
-        page = context.pages()[0];
+        const page = context.pages()[0];
 
         await page.goto(
           "https://portal.colsanitas.com/sso/login?service=https%3A%2F%2Fappcore.colsanitas.com%2FValidadorDerechos%2Fpages%2Fgestion%2FValidacionDerechos.seam",
@@ -112,6 +127,150 @@ export const AutorizacionEnfaso = async (req, res) => {
         if (!paginaLista) {
           throw new Error("No se pudo cargar la página de validación");
         }
+
+        await client.sessions.stop(session.id);
+
+      } catch (error) {
+        console.error("Error en proceso asíncrono:", error);
+      }
+    })();
+
+  } catch (error) {
+    console.error("❌ Error al iniciar:", error.message);
+
+    if (!res.headersSent) {
+      res.status(500).json({
+        mensaje: "Error al iniciar el proceso",
+        error: error.message,
+      });
+    }
+  }
+};
+
+export const detectarSesionExpiradaEnfaso = async (page) => {
+  try {
+    // Esperar a que cargue algo estable
+    await page.waitForLoadState("domcontentloaded");
+
+    const urlActual = page.url();
+
+    // 1️⃣ Si la URL volvió al login
+    if (urlActual.includes("/sso/login")) {
+      console.log("🔎 Detectado por URL de login");
+      return true;
+    }
+
+    // 2️⃣ Si el formulario de login está visible
+    const inputUsuario = page.locator("input[name='username']");
+    if (await inputUsuario.isVisible().catch(() => false)) {
+      console.log("🔎 Detectado por campo username visible");
+      return true;
+    }
+
+    // 3️⃣ Si existe mensaje típico de sesión expirada
+    const textoSesionExpirada = page.locator("text=/sesión expirada|session expired|vuelva a iniciar sesión/i");
+    if (await textoSesionExpirada.first().isVisible().catch(() => false)) {
+      console.log("🔎 Detectado por mensaje de sesión expirada");
+      return true;
+    }
+
+    // 4️⃣ Si la página quedó en blanco o error inesperado
+    const bodyVacio = await page.evaluate(() => {
+      return !document.body || document.body.innerText.trim().length === 0;
+    });
+
+    if (bodyVacio) {
+      console.log("🔎 Detectado por body vacío");
+      return true;
+    }
+
+    // Si no se detectó nada
+    return false;
+
+  } catch (error) {
+    console.log("⚠️ Error verificando sesión, asumimos expirada:", error.message);
+    return true; // Más seguro asumir expirada si algo falla
+  }
+};  
+
+export const AutorizacionEnfaso = async (req, res) => {
+  const { usuario, clave, profileId, tipoConsulta, tipoDocumento, documento, numAutorizacion } = req.body;
+
+  try {
+    // Intentar con el perfil existente
+    let session = await client.sessions.create({ 
+      acceptCookies: true,
+      saveDownloads: true,
+      profile: {
+        id: profileId,
+        persistChanges: false,
+      }
+    });
+
+    res.status(200).json({
+      mensaje: "Proceso iniciado",
+      liveUrl: session.liveUrl,
+    });
+
+    (async () => {
+      try {
+        let browser = await chromium.connectOverCDP(session.wsEndpoint);
+        let context = browser.contexts()[0];
+        let page = context.pages()[0];
+
+        await page.goto(
+          "https://portal.colsanitas.com/sso/login?service=https%3A%2F%2Fappcore.colsanitas.com%2FValidadorDerechos%2Fpages%2Fgestion%2FValidacionDerechos.seam",
+          { waitUntil: 'networkidle' }
+        );
+
+        const sesionExpirada = await detectarSesionExpiradaEnfaso(page);
+
+        if (sesionExpirada) {
+          console.log("⚠️ Sesión expirada - Renovando perfil...");
+          
+          // 🔄 Cerrar sesión actual
+          await browser.close();
+          await client.sessions.stop(session.id);
+
+          // ⏳ Esperar 2 segundos para que se libere el perfil
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          // 🆕 NUEVA SESIÓN CON persistChanges: true para actualizar perfil
+          session = await client.sessions.create({ 
+            acceptCookies: true,
+            saveDownloads: true,
+            profile: {
+              id: profileId,
+              persistChanges: true, // 🔑 Ahora sí guardamos cambios
+            }
+          });
+
+          browser = await chromium.connectOverCDP(session.wsEndpoint);
+          context = browser.contexts()[0];
+          page = context.pages()[0];
+
+          await page.goto(
+            "https://portal.colsanitas.com/sso/login?service=https%3A%2F%2Fappcore.colsanitas.com%2FValidadorDerechos%2Fpages%2Fgestion%2FValidacionDerechos.seam"
+          );
+
+          // Re-login
+          // LOGIN
+          await page.fill("input[name='username']", usuario);
+          await page.waitForTimeout(1000);
+          await page.fill("input[name='password']", clave);
+
+          // Hacer click en ingresar y esperar que la URL cambie a la del portal
+          await page.waitForTimeout(1000);
+          await page
+            .locator("input[type='submit'][value='Ingresar']")
+            .click({ force: true });
+          // Esperar que se procese el login
+          await page.waitForTimeout(5000);
+
+          console.log("✅ Perfil renovado con nueva sesión");
+        }
+
+        // Continuar con el flujo normal
 
         // =============================
         // SELECCIÓN SEGÚN tipoConsulta
@@ -449,23 +608,20 @@ export const AutorizacionEnfaso = async (req, res) => {
 
                 datos.observacionesCodificadas = obsCodif;
 
-                console.log("Datos finales extraídos:", datos);
                 return datos;
               });
 
-              console.log("Datos extraídos del modal:", infoModal);
 
               if (infoModal) {
                 autorizacionesValidas[0].modalidad = infoModal.modalidad;
-                autorizacionesValidas[0].prestador = infoModal.prestador;
-                autorizacionesValidas[0].observacionesCodificadas =
-                  infoModal.observacionesCodificadas;
+                autorizacionesValidas[0].prestadorQueOrdena = infoModal.prestador;
+                autorizacionesValidas[0].observacionesCodificadas = infoModal.observacionesCodificadas;
               }
             }
 
             // Determinar si se puede agendar
-            let puedeAgendar = false;
-            let motivo = "";
+            puedeAgendar = false;
+            motivo = "";
 
             if (autorizacionesValidas.length === 0) {
               motivo = "No tiene autorizaciones válidas para ENFASO";
@@ -477,6 +633,10 @@ export const AutorizacionEnfaso = async (req, res) => {
             console.log({
               paciente: datosUsuario.nombre,
               estado: datosUsuario.estado,
+              tipoEntidad: datosUsuario.compania,
+              plan: datosUsuario.plan,
+              edad: datosUsuario.edad,
+              sexo: datosUsuario.sexo,
               tipoEntidad,
               autorizaciones,
               autorizacionesValidas,
@@ -508,6 +668,170 @@ export const AutorizacionEnfaso = async (req, res) => {
 
           await page.locator("#formaVDGeneral\\:btnConsultarUsuario").click();
           await page.waitForTimeout(3000);
+
+          // ── 1. Datos del usuario ──────────────────────────────────────────────────
+          await page.waitForSelector("#info-usuario", { timeout: 30000 });
+
+          const datosUsuario = await page.evaluate(() => {
+            const contenedor = document.querySelector("#info-usuario");
+            if (!contenedor) return null;
+
+            const obtenerValor = (labelTexto) => {
+              const labels = Array.from(contenedor.querySelectorAll("label"));
+              const label = labels.find((l) => l.innerText.trim().includes(labelTexto));
+              if (!label) return null;
+              const datoDiv = label.parentElement.querySelector(".info-dato");
+              return datoDiv ? datoDiv.innerText.trim() : null;
+            };
+
+            return {
+              nombre: contenedor.querySelector("h2")?.innerText.trim() || null,
+              compania: obtenerValor("Compañía"),
+              plan: obtenerValor("Plan"),
+              contrato: obtenerValor("Contrato"),
+              estado: obtenerValor("Estado"),
+              tipoDocumento: obtenerValor("Tipo Documento"),
+              numeroDocumento: obtenerValor("Número Documento"),
+              fechaNacimiento: obtenerValor("Fecha Nacimiento"),
+              edad: obtenerValor("Edad"),
+              sexo: obtenerValor("Sexo"),
+            };
+          });
+
+          if (!datosUsuario) throw new Error("No se encontró información del usuario");
+
+          const estadosValidos = ["ACTIVO", "VIGENTE"];
+          const esActivo = estadosValidos.includes(datosUsuario.estado?.toUpperCase());
+
+          let puedeAgendar = false;
+          let motivo = "";
+
+          if (!esActivo) {
+            motivo = "Paciente inactivo";
+            console.log({ paciente: datosUsuario.nombre, estado: datosUsuario.estado, puedeAgendar, motivo });
+          } else {
+            // ── 2. Esperar tabla de autorizaciones (ya visible sin navegar al label) ──
+            await page.waitForSelector(
+              "#formaVDGeneral\\:servicios\\:includeInformacionServicio\\:frm\\:includeRegistroAdmisionVolantes\\:frm\\:formaConsultaVolantes\\:detListPrest",
+              { timeout: 30000 }
+            );
+
+            // ── 3. Extraer autorizaciones (misma lógica que en flujo documento) ───────
+            const autorizaciones = await page.evaluate(() => {
+              const tbody = document.querySelector(
+                "#formaVDGeneral\\:servicios\\:includeInformacionServicio\\:frm\\:includeRegistroAdmisionVolantes\\:frm\\:formaConsultaVolantes\\:detListPrest\\:tb"
+              );
+              if (!tbody) return [];
+
+              return Array.from(tbody.querySelectorAll("tr.rich-table-row")).map((fila) => {
+                const celdas = fila.querySelectorAll("td");
+                const subFila = fila.nextElementSibling?.classList.contains("rich-subtable-row")
+                  ? fila.nextElementSibling : null;
+                const celdasSub = Array.from(subFila?.querySelectorAll("td") || []);
+
+                return {
+                  numeroAutorizacion: celdas[1]?.innerText.trim(),
+                  tipoAutorizacion:   celdas[2]?.innerText.trim(),
+                  fechaAprobacion:    celdas[3]?.innerText.trim(),
+                  fechaVigencia:      celdas[4]?.innerText.trim(),
+                  estado:             celdas[5]?.innerText.trim(),
+                  prestador:          celdas[6]?.innerText.trim(),
+                  codigo:             celdasSub[1]?.innerText.trim(),
+                  descripcion:        celdasSub[2]?.innerText.trim(),
+                  cantidad:           celdasSub[7]?.innerText.trim(),
+                };
+              });
+            });
+
+            // ── 4. Filtrar autorizaciones válidas ─────────────────────────────────────
+            const hoy = moment().tz("America/Bogota").startOf("day");
+
+            const autorizacionesValidas = autorizaciones.filter((a) => {
+              if (!a.fechaVigencia) return false;
+              const fechaVigencia = moment.tz(a.fechaVigencia, "DD/MM/YYYY", "America/Bogota").endOf("day");
+              const codigosPermitidos = ["1005434", "1005435", "1005436"];
+
+              return (
+                a.estado?.toUpperCase() === "APROBADA" &&
+                a.prestador?.toUpperCase().includes("ENFASO") &&
+                fechaVigencia.isSameOrAfter(hoy) &&
+                codigosPermitidos.some((c) => a.codigo?.includes(c))
+              );
+            });
+
+            // ── 5. Abrir modal "Mostrar" y extraer modalidad ──────────────────────────
+            if (autorizacionesValidas.length > 0) {
+              await page.locator("a", { hasText: "Mostrar" }).first().click();
+              await page.waitForSelector("#buscandoDetalle", { state: "hidden", timeout: 30000 });
+              await page.waitForTimeout(2000);
+
+              const infoModal = await page.evaluate(() => {
+                const contenedor = document.querySelector(
+                  "#formaVDGeneral\\:servicios\\:includeInformacionServicio\\:frm\\:includeRegistroAdmisionVolantes\\:frm\\:formaConsultaVolantes\\:detalle-volanteContentDiv"
+                );
+                if (!contenedor) return null;
+
+                const style = window.getComputedStyle(contenedor.parentElement.parentElement);
+                if (style.display === "none") return null;
+
+                const tabla = contenedor.querySelector("#tablaDetalleVolante");
+                if (!tabla) return null;
+
+                const datos = {};
+                tabla.querySelectorAll("tbody > tr").forEach((fila) => {
+                  const celdas = fila.querySelectorAll("td");
+                  if (celdas.length === 2 && !celdas[0].hasAttribute("colspan")) {
+                    const label = celdas[0].textContent.trim();
+                    const valor = celdas[1].textContent.trim();
+                    if (label === "Lugar") datos.modalidad = valor;
+                    else if (label === "Prestador que ordena:") datos.prestador = valor;
+                  }
+                });
+
+                const obsCodif = [];
+                const tablaObsCodif = contenedor.querySelector("#tablaDetalleVolObsCodif tbody");
+                if (tablaObsCodif) {
+                  tablaObsCodif.querySelectorAll("tr").forEach((tr) => {
+                    const celdas = tr.querySelectorAll("td");
+                    if (celdas.length === 2) {
+                      obsCodif.push({
+                        codigo: celdas[0].textContent.trim(),
+                        observacion: celdas[1].textContent.trim(),
+                      });
+                    }
+                  });
+                }
+
+                datos.observacionesCodificadas = obsCodif;
+                return datos;
+              });
+
+              if (infoModal) {
+                autorizacionesValidas[0].modalidad = infoModal.modalidad;
+                autorizacionesValidas[0].prestadorQueOrdena = infoModal.prestador;
+                autorizacionesValidas[0].observacionesCodificadas = infoModal.observacionesCodificadas;
+              }
+            }
+
+            if (autorizacionesValidas.length === 0) {
+              motivo = "No tiene autorizaciones válidas para ENFASO";
+            } else {
+              puedeAgendar = true;
+            }
+
+            console.log({
+              paciente: datosUsuario.nombre,
+              estado: datosUsuario.estado,
+              tipoEntidad: datosUsuario.compania,
+              plan: datosUsuario.plan,
+              edad: datosUsuario.edad,
+              sexo: datosUsuario.sexo,
+              autorizaciones,
+              autorizacionesValidas,
+              puedeAgendar,
+              motivo,
+            });
+          }
         } else {
           throw new Error("tipoConsulta no válido");
         }
@@ -683,7 +1007,7 @@ export const AutorizacionColpatria = async (req, res) => {
 
         const sesionExpirada = await detectarSesionExpirada(page);
 
-        if (sesionExpirada) {
+        if (sesionExpirada) { 
           console.log("⚠️ Sesión expirada - Renovando perfil...");
           
           // 🔄 Cerrar sesión actual
@@ -740,93 +1064,97 @@ export const AutorizacionColpatria = async (req, res) => {
         await page.waitForTimeout(5000);
 
         // 1️⃣ Esperar que la tabla cargue
-        await page.waitForSelector('#queriesTable tbody tr', { timeout: 3000 });
+        await page.waitForSelector('#queriesTable tbody tr', { timeout: 5000 });
 
         // 2️⃣ Tomar la fila más reciente (primera)
         const firstRow = page.locator('#queriesTable tbody tr').first();
+        const keyNumber = await firstRow.locator('td').nth(4).innerText(); // columna "No. de solicitud"
+        console.log("🔹 KeyNumber encontrado:", keyNumber);
 
-        // 3️⃣ Click en "Ver detalles"
-        await firstRow.locator('td.control-column').click();
+        const cookies = await context.cookies('https://proveedores.axacolpatria.co');
+        const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
 
-        // Esperar que DataTables cree la fila child
-        await page.waitForSelector('#queriesTable tbody tr.child');
-        
-        // Ahora buscar el botón SOLO dentro del child
-        const childRow = page.locator('#queriesTable tbody tr.child').first();
+        const formData = new URLSearchParams();
+        formData.append("_Consultadeautorizacionesdesalud_INSTANCE_e5P7yim3vwg5_keyNumber", keyNumber);
+        formData.append("_Consultadeautorizacionesdesalud_INSTANCE_e5P7yim3vwg5_cmd", "download-list");
+        const postUrl = "https://proveedores.axacolpatria.co/group/salud/consulta-de-autorizaciones-medicas?p_p_id=Consultadeautorizacionesdesalud_INSTANCE_e5P7yim3vwg5&p_p_lifecycle=2&p_p_state=normal&p_p_mode=view&p_p_cacheability=cacheLevelPage";
 
-        const downloadLink = childRow.locator('a.downloadAction');
+        console.log('📤 Body:', formData.toString());
+        console.log('📤 Cookie header:', cookieHeader);
 
-        // Esperar que esté visible
-        await downloadLink.waitFor({ state: 'visible' });
-        
-        // Click en el link de descarga
-        const pagesBefore = context.pages().length;
-        await downloadLink.click();
-
-        const pagesAfter = context.pages().length;
-
-        console.log("🧭 Páginas antes:", pagesBefore);
-        console.log("🧭 Páginas después:", pagesAfter);
-
-        // Esperar que Hyperbrowser empaquete el ZIP
-        console.log("⏳ Esperando que Hyperbrowser prepare los archivos...");
-
-        let downloadsResponse;
-        let retries = 0;
-        const maxRetries = 30; // 30 segundos máximo
-
-        while (retries < maxRetries) {
-          downloadsResponse = await client.sessions.getDownloadsURL(session.id);
-
-          console.log("📦 Estado descarga:", downloadsResponse?.status);
-
-          if (downloadsResponse?.status === 'completed') {
-            break;
+        const resp = await fetch(postUrl, {
+          method: "POST",
+          body: formData.toString(),
+          headers: {
+            "Cookie": cookieHeader,
+            "Content-Type": "application/x-www-form-urlencoded",
           }
+        });
 
-          if (downloadsResponse?.status === 'failed') {
-            throw new Error("Hyperbrowser marcó la descarga como failed");
-          }
+        // 👇 Ver qué responde antes de parsear JSON
+        const text = await resp.text();
+        console.log('📥 Status:', resp.status);
+        console.log('📥 Response text:', text);
+        let downloadUrl;
 
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          retries++;
+        // Solo parsear si es JSON
+        try {
+          const json = JSON.parse(text);
+          console.log('📥 Response JSON:', json);
+          downloadUrl = json.url;
+        } catch (e) {
+          console.log('❌ No es JSON, la respuesta es:', text.substring(0, 500));
         }
 
-        if (!downloadsResponse?.downloadsUrl) {
-          throw new Error("No se pudo obtener la URL del ZIP");
+        console.log("🔹 URL de descarga:", downloadUrl);
+
+        const downloadResp = await fetch(downloadUrl, {
+          method: "GET",
+          headers: {
+            "Cookie": cookieHeader
+          }
+        });
+
+        console.log('📥 Download status:', downloadResp.status);
+
+        const arrayBuffer = await downloadResp.arrayBuffer();
+
+        const pdfDoc = await pdfjsLib.getDocument({ 
+          data: new Uint8Array(arrayBuffer),
+          password: documento
+        }).promise;
+
+        let fullText = '';
+        for (let i = 1; i <= pdfDoc.numPages; i++) {
+          const page = await pdfDoc.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map(item => item.str).join(' ');
+          fullText += pageText + '\n';
         }
 
-        console.log("🔗 URL ZIP:", downloadsResponse.downloadsUrl);
+        const extraerDatos = (text) => {
+          const get = (regex) => {
+            const match = text.match(regex);
+            return match?.[1]?.trim() || null;
+          };
 
-        // 🔽 Descargar el ZIP
-        const zipResponse = await fetch(downloadsResponse.downloadsUrl);
-        const zipBuffer = Buffer.from(await zipResponse.arrayBuffer());
+          return {
+            fechaExpedicion: get(/(\d{1,2}\/\d{1,2}\/\d{4})\s+Fecha\s+De\s+Expedición/i),
+            autorizacionNo: get(/(\d{6,})\s+Autorización\s+No/i),
+            CC: get(/CC\s+(\d+)/i),
+            nombre: get(/CC\s+\d+\s+([A-ZÁÉÍÓÚÑ\s]+?)\s+Plan:/i),
+            codigoPlan: get(/Contrato\s+\d+\s+(\d+)\s+Código\s+Plan:/i),
+            plan: get(/Código\s+Plan:\s+(.+?)\s+CC/i),
+            codigoServicio: get(/Código\s+Servicio\s+(\d+)/i),
+            servicio: get(/Servicio\s+\d+\s+([A-ZÁÉÍÓÚÑ\s]+?)\s+Código\s+Diágnostico/i),
+            codigoDiagnostico: get(/Código\s+Diágnostico\s+([A-Z0-9]+)/i),
+            diagnostico: get(/Diágnostico\s+[A-Z0-9]+\s+([A-ZÁÉÍÓÚÑ\s,]+?)\s+Medicamento/i),
+            observaciones: get(/Observaciones\s+([\s\S]+?)\s+Autorizado\s+Por:/i),
+          };
+        };
 
-        // Extraer PDF
-        const AdmZip = (await import('adm-zip')).default;
-        const zip = new AdmZip(zipBuffer);
-        const zipEntries = zip.getEntries();
-
-        console.log("📂 Archivos en ZIP:", zipEntries.map(e => e.entryName));
-
-        const pdfEntry = zipEntries.find(e => e.entryName.endsWith('.pdf'));
-        if (!pdfEntry) throw new Error('No se encontró PDF en el ZIP');
-
-        const pdfBuffer = pdfEntry.getData();
-
-        // Crear carpeta local
-        const downloadDir = path.join(process.cwd(), "descargas");
-        await fs.promises.mkdir(downloadDir, { recursive: true });
-
-        const filePath = path.join(downloadDir, `autorizacion_${Date.now()}.pdf`);
-        await fs.promises.writeFile(filePath, pdfBuffer);
-
-        console.log("📦 Tamaño:", pdfBuffer.length, "bytes");
-        console.log("✅ PDF guardado en:", filePath);
-
-        // 🔴 Cerrar ahora sí después de obtener el archivo
-        await browser.close();
-        await client.sessions.stop(session.id);
+        const datos = extraerDatos(fullText);
+        console.log('📋 Datos extraídos:', datos);
 
         console.log("✅ Proceso completado");
 

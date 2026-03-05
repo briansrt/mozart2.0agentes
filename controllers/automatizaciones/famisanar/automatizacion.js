@@ -99,8 +99,11 @@ async function seleccionarFechaVuetify(frame, inputSelector, fecha) {
 // AUTORIZACIONES FAMISANAR
 
 export const descargarAutorizacion = async (req, res) => {
-  const { usuario, clave, sede, fechaInicio, fechaFin, tenant } = req.body;
+  const { sede, fechaInicio, fechaFin, tenant } = req.body;
   let inicio, fin;
+
+  const usuario = process.env.USUARIOCEMDI
+  const clave = process.env.CLAVECEMDI
 
   if (fechaInicio && fechaFin) {
     inicio = parseFecha(fechaInicio);
@@ -142,7 +145,9 @@ export const descargarAutorizacion = async (req, res) => {
 
         // LOGIN
         await page.locator("#loginForm\\:id").fill(usuario);
+        await page.waitForTimeout(500);
         await page.locator("#loginForm\\:clave").fill(clave);
+        await page.waitForTimeout(500);
         await page.locator("#loginForm\\:loginButton").click();
         await page.waitForLoadState("networkidle");
 

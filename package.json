@@ -28,6 +28,7 @@
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "moment-timezone": "^0.6.0",
+    "pdfjs-dist": "^5.5.207",
     "playwright-core": "^1.58.2",
     "xlsx": "^0.18.5"
   }
