@@ -652,7 +652,7 @@ export const AgendarCitaGuajiraCristaInicial = async (req, res) => {
 }
 
 export const AgendarCitaGuajiraCristal = async (req, res) => {
-  const { usuario, clave, profileId } = req.body
+  const { usuario, clave, profileId, documento } = req.body
 
   try {
     // Intentar con el perfil existente
@@ -709,19 +709,7 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
             "https://qrystalos.com/#/autenticarse"
           );
 
-          // Re-login
-          // Organización
-          const orgInput = page.locator('input[aria-label="Organización *"]');
-          await orgInput.click();
-          await orgInput.type('Clinica + Esperanza', { delay: 100 });
-          await page.waitForFunction(() => {
-            const el = document.querySelector('input[aria-label="Organización *"]');
-            return el && el.getAttribute('aria-expanded') === 'true';
-          });
-          await page.locator('.q-menu .q-item', {
-            hasText: 'Clinica + Esperanza'
-          }).first().click();
-
+          
           // Usuario
           await page.waitForSelector('input[aria-label="Usuario *"]');
           await page.fill('input[aria-label="Usuario *"]', usuario);
@@ -751,6 +739,65 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
         });
 
         console.log("✅ Entró a Agenda correctamente");
+
+        // 1️⃣ Click al botón de acción (recargar)
+        await page.waitForSelector('.accion-btn', { timeout: 10000 });
+        await page.click('.accion-btn');
+
+        // 2️⃣ Escribir documento
+        await page.waitForSelector('input[placeholder="Doc. Identificación"]');
+
+        await page.fill('input[placeholder="Doc. Identificación"]', documento);
+
+        // esperar que cargue la búsqueda
+        await page.waitForTimeout(1500);
+
+        // 3️⃣ Esperar la tabla con resultados
+        await page.waitForSelector('.q-table tbody tr.q-tr.cursor-pointer');
+
+        // 4️⃣ Buscar la fila que tenga el documento
+        const fila = page.locator('.q-table tbody tr.q-tr.cursor-pointer', {
+          hasText: documento
+        }).first();
+
+        await fila.waitFor();
+        await fila.click();
+
+        // esperar que aparezca el panel expandido
+        const botonSeleccionar = page.locator('button', {
+          hasText: 'Seleccionar'
+        }).last(); // usamos el último porque el primero es otro
+
+        await botonSeleccionar.waitFor({ state: "visible" });
+
+        await botonSeleccionar.click();
+
+        const botonLista = page.locator('.accion-btn').nth(2);
+
+        await botonLista.waitFor();
+        await botonLista.click();
+
+        // abrir select especialidad
+        const especialidadInput = page.locator('input[aria-label="Especialidad"]');
+
+        await especialidadInput.click();
+
+        // escribir para filtrar
+        await especialidadInput.fill('PERINATOLOGÍA');
+
+        // esperar opción
+        const opcion = page.locator('.q-menu .q-item', {
+          hasText: 'PERINATOLOGÍA O MEDICINA FETAL'
+        }).first();
+
+        await opcion.waitFor();
+        await opcion.click();
+
+        const fechaInicial = page.locator('input[aria-label="Fecha Inicial"]');
+        await fechaInicial.fill('2026-02-03');
+        
+        const fechaFinal = page.locator('input[aria-label="Fecha final"]');
+        await fechaFinal.fill('2026-03-31');
 
 
       } catch (error) {

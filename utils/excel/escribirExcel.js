@@ -9,10 +9,25 @@ export const escribirExcel = (data, outputPath) => {
 
 export const generarExcelBuffer = (data) => {
   const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(data);
+  const headers = Object.keys(data[0] || {});
+  const rows = data.map(row => headers.map(h => row[h]));
+
+  const wsData = [headers, ...rows];
+  const ws = {};
+  const range = { s: { r: 0, c: 0 }, e: { r: wsData.length - 1, c: headers.length - 1 } };
+
+  wsData.forEach((row, r) => {
+    row.forEach((val, c) => {
+      const cellAddress = XLSX.utils.encode_cell({ r, c });
+      ws[cellAddress] = {
+        t: typeof val === "boolean" ? "b" : "s",
+        v: val === null || val === undefined ? "" : typeof val === "boolean" ? val : String(val)
+      };
+    });
+  });
+
+  ws["!ref"] = XLSX.utils.encode_range(range);
   XLSX.utils.book_append_sheet(wb, ws, "Autorizaciones");
-  
-  // 🔹 IMPORTANTE: Retornar como Buffer de Node.js
-  const arrayBuffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  return Buffer.from(arrayBuffer);
+
+  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
 };
