@@ -64,22 +64,48 @@ const detectarSesionExpiradaGuajira = async (page) => {
 };
 
 const detectarSesionExpiradaCristal = async (page) => {
-  const currentUrl = page.url();
+  try {
+    await page.waitForLoadState("domcontentloaded");
 
-  if (currentUrl.includes("/autenticarse")) {
-    console.log("🔎 Está en login");
+    await page.waitForLoadState("networkidle", { timeout: 3000 }).catch(() => {
+      console.log("⏱️ networkidle no alcanzado, continuando...");
+    });
+
+    const currentUrl = page.url();
+    console.log("🔎 URL actual:", currentUrl);
+
+    // 1️⃣ Si está en login, sesión expiró
+    if (currentUrl.includes("/autenticarse")) {
+      console.log("⚠️ Detectado login por URL");
+      return true;
+    }
+
+    // 2️⃣ Si está en el módulo correcto, sesión activa
+    if (currentUrl.includes("/ce")) {
+      console.log("✅ Sesión activa por URL");
+      return false;
+    }
+
+    // 3️⃣ Solo si la URL es ambigua, revisar DOM en paralelo
+    const [tieneUsuario, tieneClave, tieneMensaje] = await Promise.all([
+      page.locator('input[aria-label="Usuario *"]').count(),
+      page.locator('input[aria-label="Clave Secreta *"]').count(),
+      page.locator('text=Su sesión ha expirado').count(),
+    ]);
+
+    if (tieneUsuario > 0 || tieneClave > 0 || tieneMensaje > 0) {
+      console.log("⚠️ Detectado formulario de login por DOM");
+      return true;
+    }
+
+    // 4️⃣ Fallback defensivo
+    console.log("⚠️ Estado incierto, asumiendo sesión expirada");
+    return true;
+
+  } catch (error) {
+    console.error("Error detectando sesión:", error);
     return true;
   }
-
-  const menuAgenda = await page.locator('a[href="#/ce/agendamiento"]').count();
-
-  if (menuAgenda > 0) {
-    console.log("✅ Sesión activa");
-    return false;
-  }
-
-  console.log("⚠️ Estado incierto, no forzamos relogin");
-  return false;
 };
 
 
@@ -406,92 +432,215 @@ export const AutorizacionGuajira = async (req, res) => {
               filaTabla.puedeAgendar = false;
             } else {
               filaTabla.puedeAgendar = true;
-              filaTabla.autorizaciones = autorizacionesValidas.map((aut) => ({
-                fechaExpedicion: aut.fechaVigencia,
-                servicio: `${aut.codigo} - ${aut.descripcion}`,
-                numeroAutorizacion: aut.numeroAutorizacion,
-                numeroRadicacion: aut.numeroAutorizacion,
-              }));
+
+              // Iterar sobre TODAS las autorizaciones válidas
+              const autorizacionesConDetalle = [];
+
+              for (const aut of autorizacionesValidas) {
+                const autBase = {
+                  fechaExpedicion: aut.fechaVigencia,
+                  servicio: `${aut.codigo} - ${aut.descripcion}`,
+                  numeroAutorizacion: aut.numeroAutorizacion,
+                  numeroRadicacion: aut.numeroAutorizacion,
+                };
+
+                // Encontrar el índice real de esta autorización en la tabla original
+                const indiceReal = autorizaciones.findIndex(
+                  (a) => a.numeroAutorizacion === aut.numeroAutorizacion
+                );
+
+                if (indiceReal === -1) {
+                  autorizacionesConDetalle.push(autBase);
+                  continue;
+                }
+
+                try {
+                  // Abrir modal de detalles
+                  await page.locator("a", { hasText: "Mostrar" }).nth(indiceReal).click();
+                  await page.waitForSelector("#buscandoDetalle", { state: "hidden", timeout: 30000 });
+                  await page.waitForTimeout(2000);
+
+                  const infoModal = await page.evaluate(() => {
+                    const contenedor = document.querySelector(
+                      "#formaVDGeneral\\:servicios\\:includeInformacionServicio\\:frm\\:includeRegistroAdmisionVolantes\\:frm\\:formaConsultaVolantes\\:detalle-volanteContentDiv"
+                    );
+                    if (!contenedor) return null;
+
+                    const style = window.getComputedStyle(contenedor.parentElement.parentElement);
+                    if (style.display === "none") return null;
+
+                    const tabla = contenedor.querySelector("#tablaDetalleVolante");
+                    if (!tabla) return null;
+
+                    const datos = {};
+                    const filas = tabla.querySelectorAll("tbody > tr");
+
+                    for (let fila of filas) {
+                      const celdas = fila.querySelectorAll("td");
+                      if (celdas.length === 2 && !celdas[0].hasAttribute("colspan")) {
+                        const label = celdas[0].textContent.trim();
+                        const valor = celdas[1].textContent.trim();
+                        if (label === "Lugar") datos.modalidad = valor;
+                        else if (label === "Prestador que ordena:") datos.prestador = valor;
+                      }
+                    }
+
+                    const obsCodif = [];
+                    const tablaObsCodif = contenedor.querySelector("#tablaDetalleVolObsCodif tbody");
+                    if (tablaObsCodif) {
+                      tablaObsCodif.querySelectorAll("tr").forEach((tr) => {
+                        const celdas = tr.querySelectorAll("td");
+                        if (celdas.length === 2) {
+                          obsCodif.push({
+                            codigo: celdas[0].textContent.trim(),
+                            observacion: celdas[1].textContent.trim(),
+                          });
+                        }
+                      });
+                    }
+
+                    datos.observacionesCodificadas = obsCodif;
+                    return datos;
+                  });
+
+                  if (infoModal) {
+                    autBase.modalidad = infoModal.modalidad;
+                    autBase.prestadorQueOrdena = infoModal.prestador;
+                    autBase.observacionesCodificadas = infoModal.observacionesCodificadas;
+                  }
+
+                  // Cerrar modal
+                  await page.evaluate(() => {
+                    const modal = document.getElementById(
+                      "formaVDGeneral:servicios:includeInformacionServicio:frm:includeRegistroAdmisionVolantes:frm:formaConsultaVolantes:detalle-volante"
+                    );
+                    if (modal?.component) modal.component.hide();
+                  });
+                  await page.waitForTimeout(1500);
+
+                  // Click en Seleccionar usando el índice real
+                  await page.locator(
+                    `#formaVDGeneral\\:servicios\\:includeInformacionServicio\\:frm\\:includeRegistroAdmisionVolantes\\:frm\\:formaConsultaVolantes\\:detListPrest\\:${indiceReal}\\:linkSeleccionarVol2`
+                  ).click();
+
+                  await page.waitForSelector(
+                    "#formaVDGeneral\\:servicios\\:includeInformacionServicio\\:frm\\:includeRegistroAdmisionVolantes\\:frm\\:formaConsultaVolantes\\:selectCausaExterna",
+                    { state: "visible", timeout: 30000 }
+                  );
+                  await page.waitForTimeout(2000);
+
+                  const infoRips = await page.evaluate(() => {
+                    const getSelectedText = (id) => {
+                      const el = document.getElementById(id);
+                      return el?.options[el.selectedIndex]?.text?.trim() ?? null;
+                    };
+                    const p = "formaVDGeneral:servicios:includeInformacionServicio:frm:includeRegistroAdmisionVolantes:frm:formaConsultaVolantes:";
+                    const diagTabla = document.querySelector("#diagnosticoContainer tbody tr");
+
+                    return {
+                      causaExterna:         getSelectedText(p + "selectCausaExterna"),
+                      grupoServicio:        getSelectedText(p + "selectGroupService"),
+                      modalidadAtencion:    getSelectedText(p + "selectModeOfCare"),
+                      finalidad:            getSelectedText(p + "selectFinalidad"),
+                      diagnosticoPrincipal: {
+                        codigo:      diagTabla?.querySelector("td:nth-child(1)")?.innerText?.trim() ?? null,
+                        descripcion: diagTabla?.querySelector("td:nth-child(2)")?.innerText?.trim() ?? null,
+                      },
+                    };
+                  });
+
+                  if (infoRips) {
+                    autBase.rips = infoRips;
+                  }
+
+                } catch (err) {
+                  console.warn(`⚠️ Error extrayendo detalle de autorización ${aut.numeroAutorizacion}:`, err.message);
+                }
+
+                autorizacionesConDetalle.push(autBase);
+              }
+
+              filaTabla.autorizaciones = autorizacionesConDetalle;
             }
           }
         }
 
-        console.log("✅ Fila lista para la tabla:", filaTabla);
-        const filasExcel = transformarAutorizacionesGuajira(filaTabla);
-        const buffer = generarExcelBuffer(filasExcel);
+        console.log("✅ Fila lista para la tabla:", JSON.stringify(filaTabla, null, 2));
+        // const filasExcel = transformarAutorizacionesGuajira(filaTabla);
+        // const buffer = generarExcelBuffer(filasExcel);
 
-        const contextGlobal = browser.contexts()[0];
-        const pageMozartia = await contextGlobal.newPage();
+        // const contextGlobal = browser.contexts()[0];
+        // const pageMozartia = await contextGlobal.newPage();
 
-        await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}/login`, {
-          waitUntil: "networkidle",
-        });
+        // await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}/login`, {
+        //   waitUntil: "networkidle",
+        // });
 
-        await pageMozartia
-          .locator('input[name="email"]')
-          .fill(process.env.mozartEmail);
-        await pageMozartia
-          .locator('input[name="password"]')
-          .fill(process.env.mozartPassword);
-        await pageMozartia
-          .getByRole("button", { name: /Acceder al Sistema/i })
-          .click();
+        // await pageMozartia
+        //   .locator('input[name="email"]')
+        //   .fill(process.env.mozartEmail);
+        // await pageMozartia
+        //   .locator('input[name="password"]')
+        //   .fill(process.env.mozartPassword);
+        // await pageMozartia
+        //   .getByRole("button", { name: /Acceder al Sistema/i })
+        //   .click();
 
-        await pageMozartia.waitForFunction(
-          (tenant) => {
-            return (
-              location.pathname.startsWith(`/${tenant}`) ||
-              location.pathname.startsWith("/medical-authorizations")
-            );
-          },
-          tenant,
-          { timeout: 60000 },
-        );
+        // await pageMozartia.waitForFunction(
+        //   (tenant) => {
+        //     return (
+        //       location.pathname.startsWith(`/${tenant}`) ||
+        //       location.pathname.startsWith("/medical-authorizations")
+        //     );
+        //   },
+        //   tenant,
+        //   { timeout: 60000 },
+        // );
 
-        await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
+        // await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
 
-        await pageMozartia.goto(
-          "https://new.app.mozartia.com/cemdiprueba/medical-authorizations",
-          { waitUntil: "networkidle" },
-        );
+        // await pageMozartia.goto(
+        //   "https://new.app.mozartia.com/cemdiprueba/medical-authorizations",
+        //   { waitUntil: "networkidle" },
+        // );
 
-        await pageMozartia
-          .getByRole("button", {
-            name: /Carga Masiva/i,
-          })
-          .waitFor({ state: "visible" });
+        // await pageMozartia
+        //   .getByRole("button", {
+        //     name: /Carga Masiva/i,
+        //   })
+        //   .waitFor({ state: "visible" });
 
-        await pageMozartia
-          .getByRole("button", {
-            name: /Carga Masiva/i,
-          })
-          .click();
+        // await pageMozartia
+        //   .getByRole("button", {
+        //     name: /Carga Masiva/i,
+        //   })
+        //   .click();
 
-        const fileInput = pageMozartia.locator(
-          'input[type="file"][accept*=".xlsx"]',
-        );
+        // const fileInput = pageMozartia.locator(
+        //   'input[type="file"][accept*=".xlsx"]',
+        // );
 
-        await fileInput.waitFor({ state: "visible" });
+        // await fileInput.waitFor({ state: "visible" });
 
-        await fileInput.setInputFiles({
-          name: "autorizaciones.xlsx",
-          mimeType:
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          buffer: buffer,
-        });
+        // await fileInput.setInputFiles({
+        //   name: "autorizaciones.xlsx",
+        //   mimeType:
+        //     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        //   buffer: buffer,
+        // });
 
-        const cargarBtn = pageMozartia.getByRole("button", {
-          name: /Cargar Archivo/i,
-        });
+        // const cargarBtn = pageMozartia.getByRole("button", {
+        //   name: /Cargar Archivo/i,
+        // });
 
-        await pageMozartia
-          .locator('button:not([disabled]):has-text("Cargar Archivo")')
-          .waitFor({ state: "visible", timeout: 15000 });
+        // await pageMozartia
+        //   .locator('button:not([disabled]):has-text("Cargar Archivo")')
+        //   .waitFor({ state: "visible", timeout: 15000 });
 
-        await cargarBtn.click();
-        console.log("✅ Excel subido a Mozart");
+        // await cargarBtn.click();
+        // console.log("✅ Excel subido a Mozart");
 
-        if (sesionExpirada) await client.sessions.stop(session.id);
+        // if (sesionExpirada) await client.sessions.stop(session.id);
 
         resultadoFinal = {
           documento: documento,
@@ -571,12 +720,49 @@ export const ConsultarAutorizacion = async (req, res) => {
 
 
 
+async function seleccionarCita(page, fecha, hora) {
+  const fechaHora = `${fecha} ${hora}`;
+  await page.waitForTimeout(3000);
+
+  while (true) {
+    await page.waitForSelector('.q-table tbody tr.q-tr', { timeout: 5000 });
+
+    // Buscar la celda de fecha que contenga el texto exacto
+    const celdaFecha = page.locator('.q-table tbody tr.q-tr td', {
+      hasText: fechaHora
+    }).first();
+
+    if (await celdaFecha.count() > 0) {
+      // Subir al <tr> padre y hacer click
+      const filaParent = celdaFecha.locator('xpath=..');
+      await filaParent.scrollIntoViewIfNeeded();
+      await filaParent.click();
+      console.log("✅ Cita encontrada:", fechaHora);
+      return true;
+    }
+
+    const botonSiguiente = page.locator(
+      'button[aria-label="Próxima página"]:not([disabled])'
+    );
+
+    if (await botonSiguiente.count() === 0) {
+      console.log("❌ No se encontró la cita:", fechaHora);
+      return false;
+    }
+
+    console.log("➡️ Pasando a la siguiente página");
+    await botonSiguiente.click();
+    await page.waitForTimeout(1500);
+  }
+}
+
+
 export const AgendarCitaGuajiraCristaInicial = async (req, res) => {
   const { usuario, clave } = req.body
   try {
     // 1️⃣ Crear un perfil nuevo
     const profile = await client.profiles.create({
-      name: `Cristal-${usuario}`, // Nombre único por usuario
+      name: `Cristal-Prueba${usuario}`, // Nombre único por usuario
     });
 
     console.log("✅ Perfil creado:", profile.id);
@@ -605,14 +791,14 @@ export const AgendarCitaGuajiraCristaInicial = async (req, res) => {
         const page = context.pages()[0];
 
         await page.goto(
-          "https://qrystalos.com/#/autenticarse",
+          "https://api-test.qrystalos.com/#/autenticarse",
         );
         await page.waitForLoadState("networkidle");
 
         // LOGIN
         // Organización
         await page.waitForSelector('input[aria-label="Organización *"]');
-        await page.fill('input[aria-label="Organización *"]', 'Clínica + Esperanza');
+        await page.fill('input[aria-label="Organización *"]', 'Pruebas Clinica esperanza');
         await page.keyboard.press("ArrowDown");
         await page.keyboard.press("Enter");
 
@@ -652,7 +838,15 @@ export const AgendarCitaGuajiraCristaInicial = async (req, res) => {
 }
 
 export const AgendarCitaGuajiraCristal = async (req, res) => {
-  const { usuario, clave, profileId, documento } = req.body
+  const { documento, fechaCita, horaCita, centroCosto, codigoServicio, tipoAtencion, numeroAutorizacion, fechaAutorizacion, fechaVencimiento, copago, valorCopago, tipoCopago, valorCita, observaciones, acompanante,responsable } = req.body
+
+  const [fechaCitaFormateada, fechaAutorizacionFormateada, fechaVencimientoFormateada] =
+  [fechaCita, fechaAutorizacion, fechaVencimiento].map(f => f.split('/').reverse().join('-'));
+
+  const usuario = process.env.USUARIOGUAJIRA
+  const clave = process.env.CLAVEGUAJIRA
+  const profileId = process.env.profileIdGuajira
+
 
   try {
     // Intentar con el perfil existente
@@ -664,77 +858,95 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
       }
     });
 
-    res.status(200).json({
-      mensaje: "Proceso iniciado",
-      liveUrl: session.liveUrl,
-    });
+    let browser = await chromium.connectOverCDP(session.wsEndpoint);
+    let context = browser.contexts()[0];
+    let page = context.pages()[0];
+    let procesando = true;
+
+    const manejarModalActualizacion = (paginaActual) => {
+      (async () => {
+        while (procesando) {
+          try {
+            const btnPostergar = paginaActual.locator('.q-dialog button span.block', {
+              hasText: 'Postergar'
+            }).first();
+            if (await btnPostergar.count() > 0) {
+              console.log("🔔 Modal de actualización detectado - Postergando...");
+              await btnPostergar.click();
+            }
+          } catch (e) {}
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      })();
+    };
+
+    manejarModalActualizacion(page);
+
+    await page.goto("https://api-test.qrystalos.com/#/ce", { waitUntil: "networkidle" });
+
+    const sesionExpirada = await detectarSesionExpiradaCristal(page);
+
+    if (sesionExpirada) {
+      console.log("⚠️ Sesión expirada - Renovando perfil...");
+      procesando = false;
+
+      await browser.close();
+      await client.sessions.stop(session.id);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // 🔑 Nueva sesión con el liveUrl correcto
+      session = await client.sessions.create({
+        acceptCookies: true,
+        saveDownloads: true,
+        profile: { id: profileId, persistChanges: true }
+      });
+
+      res.status(200).json({
+        mensaje: "Proceso iniciado",
+        liveUrl: session.liveUrl,
+      });
+
+      browser = await chromium.connectOverCDP(session.wsEndpoint);
+      context = browser.contexts()[0];
+      page = context.pages()[0];
+
+      procesando = true;
+      manejarModalActualizacion(page);
+
+      // Login
+      await page.goto("https://api-test.qrystalos.com/#/autenticarse");
+
+      const selectorInput = 'input[aria-label="Organización *"]';
+      await page.click(selectorInput);
+      await page.fill(selectorInput, 'Pruebas Clinica esperanza');
+      await page.waitForSelector('div.q-item span:has-text("Pruebas Clinica esperanza")');
+      await page.click('div.q-item span:has-text("Pruebas Clinica esperanza")');
+
+      const usuarioInput = page.locator('input[aria-label="Usuario *"]').first();
+      await usuarioInput.waitFor({ state: 'attached' });
+      await usuarioInput.fill(usuario);
+
+      const claveInput = page.locator('input[aria-label="Clave Secreta *"]').first();
+      await claveInput.waitFor({ state: 'attached' });
+      await claveInput.fill(clave);
+
+      await page.click('button:has-text("Continuar")');
+      await page.waitForLoadState("networkidle");
+
+      console.log("✅ Perfil renovado con nueva sesión");
+    }
 
     (async () => {
       try {
-        let browser = await chromium.connectOverCDP(session.wsEndpoint);
-        let context = browser.contexts()[0];
-        let page = context.pages()[0];
-
-        await page.goto("https://qrystalos.com/#/ce", {
-          waitUntil: "networkidle"
-        });
-
-        const sesionExpirada = await detectarSesionExpiradaCristal(page);
-
-        if (sesionExpirada) {
-          console.log("⚠️ Sesión expirada - Renovando perfil...");
-          
-          // 🔄 Cerrar sesión actual
-          await browser.close();
-          await client.sessions.stop(session.id);
-
-          // ⏳ Esperar 2 segundos para que se libere el perfil
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          // 🆕 NUEVA SESIÓN CON persistChanges: true para actualizar perfil
-          session = await client.sessions.create({ 
-            acceptCookies: true,
-            saveDownloads: true,
-            profile: {
-              id: profileId,
-              persistChanges: true, // 🔑 Ahora sí guardamos cambios
-            }
-          });
-
-          browser = await chromium.connectOverCDP(session.wsEndpoint);
-          context = browser.contexts()[0];
-          page = context.pages()[0];
-
-          await page.goto(
-            "https://qrystalos.com/#/autenticarse"
-          );
-
-          
-          // Usuario
-          await page.waitForSelector('input[aria-label="Usuario *"]');
-          await page.fill('input[aria-label="Usuario *"]', usuario);
-
-          // Contraseña
-          await page.fill('input[type="password"]', clave);
-
-          // Click continuar
-          await page.click('button:has-text("Continuar")');
-
-          // Esperar navegación después del login
-          await page.waitForLoadState("networkidle");
-          
-
-          console.log("✅ Perfil renovado con nueva sesión");
-        }
 
         // Continuar con el flujo normal
-        await page.goto("https://qrystalos.com/#/ce", {
+        await page.goto("https://api-test.qrystalos.com/#/ce", {
           waitUntil: "networkidle"
         });
 
         await page.waitForTimeout(3000);
 
-        await page.goto("https://qrystalos.com/#/ce/agendamiento", {
+        await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
           waitUntil: "networkidle"
         });
 
@@ -792,14 +1004,186 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
 
         await opcion.waitFor();
         await opcion.click();
+        await page.waitForTimeout(3000);
+        await page.locator('input[aria-label="Fecha Inicial"]').fill(fechaCitaFormateada);
+        await page.waitForTimeout(3000);
+        await page.locator('input[aria-label="Fecha final"]').fill(fechaCitaFormateada);
 
-        const fechaInicial = page.locator('input[aria-label="Fecha Inicial"]');
-        await fechaInicial.fill('2026-02-03');
-        
-        const fechaFinal = page.locator('input[aria-label="Fecha final"]');
-        await fechaFinal.fill('2026-03-31');
+        const valor = await page.locator('input[aria-label="Fecha Inicial"]').inputValue();
+        console.log(valor);
 
+        await seleccionarCita(page, fechaCita, horaCita);
 
+        await page.waitForTimeout(4000);
+
+        if (centroCosto) {
+          // 1️⃣ Ubicar input del select
+          const centroCostoInput = page.locator('input[aria-label="Centro de costo"]');
+          await centroCostoInput.click();
+          
+          // 2️⃣ Escribir palabra clave para filtrar
+          const palabraClave = centroCosto.split(' ')[0]; 
+          await centroCostoInput.fill(palabraClave);
+
+          // 3️⃣ Esperar que aparezcan opciones
+          const listaOpciones = page.locator('.q-menu .q-item');
+          await listaOpciones.first().waitFor({ state: 'visible' });
+
+          // 4️⃣ Buscar la opción que contenga el texto deseado
+          const opcionSeleccionada = listaOpciones.filter({
+            hasText: centroCosto // busca coincidencia parcial con todo tu texto
+          }).first();
+
+          await opcionSeleccionada.click();
+        }
+
+        const tipoInput = page.locator('input[aria-label="Tipo de Atención"]');
+        await tipoInput.waitFor();
+        await tipoInput.click();
+        await tipoInput.fill(tipoAtencion);
+
+        const opcionTipo = page.locator('.q-menu .q-item', {
+          hasText: tipoAtencion
+        }).first();
+
+        await opcionTipo.waitFor();
+        await opcionTipo.click();
+
+        // ===== Clase Orden =====
+        const claseOrden = page.locator('input[aria-label="Clase Orden:-"]');
+
+        await claseOrden.click();
+        await claseOrden.fill('Normal');
+
+        const opcionClase = page.locator('.q-menu .q-item', {
+          hasText: 'Normal'
+        }).first();
+
+        await opcionClase.click();
+
+        if (codigoServicio) {
+
+          const serviciosInput = page.locator('input[aria-label="Servicios"]');
+          await serviciosInput.click();
+          await serviciosInput.fill(codigoServicio);
+
+          // esperar que aparezca el menú con opciones
+          const primeraOpcion = page.locator('.q-menu .q-item').first();
+          await primeraOpcion.waitFor({ state: 'visible' });
+
+          // seleccionar la opción filtrada
+          await primeraOpcion.click();
+        }
+
+        // ===== Número de autorización =====
+        if (numeroAutorizacion) {
+
+          const autorizacion = page.locator('input[aria-label="N° Autorizacion"]');
+          await autorizacion.fill(numeroAutorizacion);
+
+          // esperar a que aparezcan los campos
+          const fechaAutorizacion = page.locator('input[aria-label="Fecha Autorizacion:"]');
+          await fechaAutorizacion.waitFor({ state: 'visible' });
+
+          const fechaVencimiento = page.locator('input[aria-label="Fecha Vencimiento:"]');
+
+          await fechaAutorizacion.fill(fechaAutorizacionFormateada);
+          await fechaVencimiento.fill(fechaVencimientoFormateada);
+        }
+
+        // ===== COPAGO =====
+        if (copago === true || copago === "true") {
+
+          const checkCopago = page.locator('[aria-label="Copago Propio?"]');
+          await checkCopago.click();
+
+          const valorCopagoInput = page.locator('input[aria-label="Valor Copago"]');
+          await valorCopagoInput.waitFor({ state: 'visible' });
+
+          const tipoCopagoSelect = page.locator('[aria-label="Tipo copago"]');
+          const valorCitaInput = page.locator('input[aria-label="Valor Cita"]');
+
+          await valorCopagoInput.fill(String(valorCopago));
+          await valorCitaInput.fill(String(valorCita));
+
+          // abrir selector
+          await tipoCopagoSelect.click();
+
+          // seleccionar por texto visible
+          const opcionTipoCopago = page.locator('.q-menu .q-item', {
+            hasText: tipoCopago
+          }).first();
+
+          await opcionTipoCopago.waitFor();
+          await opcionTipoCopago.click();
+
+        } else {
+
+          const noCobrar = page.locator('[aria-label="No Cobrar"]');
+          await noCobrar.click();
+
+        }
+
+        if (observaciones) {
+          const observacionesInput = page.locator('textarea[aria-label="Observaciones:"]');
+          await observacionesInput.waitFor({ state: 'visible' });
+          await observacionesInput.fill(observaciones);
+        }
+
+        if (acompanante || responsable) {
+          // abrir pestaña
+          const tabAcompanante = page.locator('.q-tab', {
+            hasText: 'Acompañante/Responsable'
+          });
+
+          await tabAcompanante.click();
+
+          // ===== DATOS ACOMPAÑANTE =====
+          if (acompanante) {
+
+            const nombreAcomp = page.locator('input[aria-label="Nombre Acompañante:"]').first();
+            const direccionAcomp = page.locator('input[aria-label="Direccion:"]');
+            const telefonoAcomp = page.locator('input[aria-label="Teléfono:"]').first();
+
+            await nombreAcomp.fill(acompanante.nombre);
+            await direccionAcomp.fill(acompanante.direccion);
+            await telefonoAcomp.fill(acompanante.telefono);
+
+            // parentesco (select)
+            const parentescoSelect = page.locator('[aria-label="Parentesco"]').first();
+            await parentescoSelect.click();
+
+            const opcionParentesco = page.locator('.q-menu .q-item', {
+              hasText: acompanante.parentesco
+            }).first();
+
+            await opcionParentesco.waitFor({ state: 'visible' });
+            await opcionParentesco.click();
+          }
+
+          // ===== DATOS RESPONSABLE =====
+          if (responsable) {
+
+            const nombreResp = page.locator('input[aria-label="Nombre Acompañante:"]').nth(1);
+            const telefonoResp = page.locator('input[aria-label="Teléfono:"]').nth(1);
+            const parentescoResp = page.locator('input[aria-label="Parentesco:"]');
+
+            await nombreResp.fill(responsable.nombre);
+            await telefonoResp.fill(responsable.telefono);
+            await parentescoResp.fill(responsable.parentesco);
+          }
+        }
+
+        const botonAgendar = page.locator('button', {
+          hasText: 'Agendar'
+        });
+
+        await botonAgendar.waitFor({ state: 'visible' });
+        await botonAgendar.click();
+
+        procesando = false;
+
+       
       } catch (error) {
         console.error("Error en proceso asíncrono:", error);
       }
@@ -814,5 +1198,4 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
       });
     }
   }
-
 }
