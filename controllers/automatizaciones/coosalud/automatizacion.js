@@ -343,27 +343,23 @@ export const CrearPQRSCoosalud = async (req, res) => {
 
     const botonEnviar = page.locator('#submit_button');
     await botonEnviar.waitFor({ state: 'visible' });
-    // await Promise.all([
-    //   page.waitForNavigation({ waitUntil: 'networkidle' }),
-    //   botonEnviar.click()
-    // ]);
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'networkidle' }),
+      botonEnviar.click()
+    ]);
 
-    // await page.waitForSelector('.requestViewId');
-    // const requestId = await page.getAttribute('.requestViewId', 'data-id');
-    // console.log('ID de la solicitud:', requestId);
+    await page.waitForSelector('.requestViewId');
+    const requestId = await page.getAttribute('.requestViewId', 'data-id');
+    console.log('ID de la solicitud:', requestId);
 
-    // // ✅ Responder con el radicado generado
-    // return res.status(200).json({
-    //   idNumber,
-    //   estado: "completado",
-    //   radicado: requestId,
-    //   motivo: `PQRS creado con el número radicado: ${requestId}`,
-    //   timestamp: new Date().toISOString()
-    // });
+    // ✅ Responder con el radicado generado
     return res.status(200).json({
       idNumber,
-      estado: "Datos puestos en el formulario"
-    })
+      estado: "completado",
+      radicado: requestId,
+      motivo: `PQRS creado con el número radicado: ${requestId}`,
+      timestamp: new Date().toISOString()
+    });
 
   } catch (error) {
     console.error("❌ Error en proceso:", error);
@@ -521,6 +517,9 @@ export const enviarCorreosDesdeExcel = async (req, res) => {
         servicio:       cita['Descripción del servicio'],
         ipsAtencion,
         numeroCaso:     cita['Numero de caso'],
+        doctor:         cita['Doctor'],
+        fecha:          cita['Fecha Sugerida'],
+        hora:           cita['Hora Sugerida'],
       };
 
       const emailPrueba = "brian.riofrio@mozartai.com.co";
