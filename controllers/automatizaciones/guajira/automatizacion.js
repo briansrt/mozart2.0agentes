@@ -238,47 +238,40 @@ export const AutorizacionGuajira = async (req, res) => {
   const { documento, profileId, usuario, clave, tipoDocumento, tenant } = req.body;
 
   let session, browser, page;
+  const cupsPermitidos = new Set([
+    "697101",
+    "751101",
+    "881401",
+    "881402",
+    "881431",
+    "881432",
+    "881434",
+    "881435",
+    "881436",
+    "881437",
+    "881438",
+    "881439",
+    "882298",
+    "1005774",
+    "890250",
+    "890250ALR",
+    "890250PNA",
+    "890350",
+    "890350ALR",
+    "890350PNA",
+    "897011"
+  ]);
 
   const URL_PORTAL =
     "https://portal.colsanitas.com/sso/login?service=https%3A%2F%2Fappcore.colsanitas.com%2FValidadorDerechos%2Fpages%2Fgestion%2FValidacionDerechos.seam%3Fcid%3D2349";
 
   try {
-    // Guardar estado inicial en cache
-    await guardarResultadoEnCache(documento, {
-      documento: documento,
-      estado: "procesando",
-      puedeAgendar: false,
-      motivo: "Verificando autorización...",
-      datos: null,
-      timestamp: new Date().toISOString()
-    });
+        session = await client.sessions.create({
+          acceptCookies: true,
+          saveDownloads: true,
+          profile: { id: profileId, persistChanges: false },
+        });
 
-    session = await client.sessions.create({
-      acceptCookies: true,
-      saveDownloads: true,
-      profile: { id: profileId, persistChanges: false },
-    });
-
-    // Responder inmediatamente
-    res.status(200).json({ 
-      mensaje: "Estoy verificando la autorización, un momento por favor...",
-      liveUrl: session.liveUrl,
-      estado: "procesando",
-      documento: documento
-    });
-
-    // Proceso en background
-    (async () => {
-      let resultadoFinal = {
-        documento: documento,
-        estado: "procesando",
-        puedeAgendar: false,
-        motivo: "",
-        datos: null,
-        timestamp: new Date().toISOString()
-      };
-
-      try {
         browser = await chromium.connectOverCDP(session.wsEndpoint);
         page = browser.contexts()[0].pages()[0];
 
@@ -408,6 +401,7 @@ export const AutorizacionGuajira = async (req, res) => {
                 return {
                   numeroAutorizacion: celdas[1]?.innerText.trim(),
                   fechaVigencia:      celdas[4]?.innerText.trim(),
+                  fechaAprobacion:    celdas[3]?.innerText.trim(),
                   estado:             celdas[5]?.innerText.trim(),
                   prestador:          celdas[6]?.innerText.trim(),
                   codigo:             celdasSub[1]?.innerText.trim(),
@@ -421,6 +415,7 @@ export const AutorizacionGuajira = async (req, res) => {
             const autorizacionesValidas = autorizaciones.filter((a) =>
               a.estado?.toUpperCase() === "APROBADA" &&
               a.prestador?.toUpperCase().includes("CLINICA ESPERANZA SAS") &&
+              cupsPermitidos.has(a.codigo?.toUpperCase()) &&
               moment
                 .tz(a.fechaVigencia, "DD/MM/YYYY", "America/Bogota")
                 .endOf("day")
@@ -438,7 +433,7 @@ export const AutorizacionGuajira = async (req, res) => {
 
               for (const aut of autorizacionesValidas) {
                 const autBase = {
-                  fechaExpedicion: aut.fechaVigencia,
+                  fechaExpedicion: aut.fechaAprobacion, //CAMBIO
                   servicio: `${aut.codigo} - ${aut.descripcion}`,
                   numeroAutorizacion: aut.numeroAutorizacion,
                   numeroRadicacion: aut.numeroAutorizacion,
@@ -565,118 +560,103 @@ export const AutorizacionGuajira = async (req, res) => {
           }
         }
 
-        console.log("✅ Fila lista para la tabla:", JSON.stringify(filaTabla, null, 2));
-        // const filasExcel = transformarAutorizacionesGuajira(filaTabla);
-        // const buffer = generarExcelBuffer(filasExcel);
+        // console.log("✅ Fila lista para la tabla:", JSON.stringify(filaTabla, null, 2));
+        
+        const filasExcel = transformarAutorizacionesGuajira(filaTabla);
+        const buffer = generarExcelBuffer(filasExcel);
 
-        // const contextGlobal = browser.contexts()[0];
-        // const pageMozartia = await contextGlobal.newPage();
+        const contextGlobal = browser.contexts()[0];
+        const pageMozartia = await contextGlobal.newPage();
 
-        // await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}/login`, {
-        //   waitUntil: "networkidle",
-        // });
+        await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}/login`, {
+          waitUntil: "networkidle",
+        });
 
-        // await pageMozartia
-        //   .locator('input[name="email"]')
-        //   .fill(process.env.mozartEmail);
-        // await pageMozartia
-        //   .locator('input[name="password"]')
-        //   .fill(process.env.mozartPassword);
-        // await pageMozartia
-        //   .getByRole("button", { name: /Acceder al Sistema/i })
-        //   .click();
+        await pageMozartia
+          .locator('input[name="email"]')
+          .fill(process.env.mozartEmail);
+        await pageMozartia
+          .locator('input[name="password"]')
+          .fill(process.env.mozartPassword);
+        await pageMozartia
+          .getByRole("button", { name: /Acceder al Sistema/i })
+          .click();
 
-        // await pageMozartia.waitForFunction(
-        //   (tenant) => {
-        //     return (
-        //       location.pathname.startsWith(`/${tenant}`) ||
-        //       location.pathname.startsWith("/medical-authorizations")
-        //     );
-        //   },
-        //   tenant,
-        //   { timeout: 60000 },
-        // );
+        await pageMozartia.waitForFunction(
+          (tenant) => {
+            return (
+              location.pathname.startsWith(`/${tenant}`) ||
+              location.pathname.startsWith("/medical-authorizations")
+            );
+          },
+          tenant,
+          { timeout: 60000 },
+        );
 
-        // await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
+        await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
 
-        // await pageMozartia.goto(
-        //   "https://new.app.mozartia.com/cemdiprueba/medical-authorizations",
-        //   { waitUntil: "networkidle" },
-        // );
+        await pageMozartia.goto(
+          "https://new.app.mozartia.com/cemdiprueba/medical-authorizations",
+          { waitUntil: "networkidle" },
+        );
 
-        // await pageMozartia
-        //   .getByRole("button", {
-        //     name: /Carga Masiva/i,
-        //   })
-        //   .waitFor({ state: "visible" });
+        await pageMozartia
+          .getByRole("button", {
+            name: /Carga Masiva/i,
+          })
+          .waitFor({ state: "visible" });
 
-        // await pageMozartia
-        //   .getByRole("button", {
-        //     name: /Carga Masiva/i,
-        //   })
-        //   .click();
+        await pageMozartia
+          .getByRole("button", {
+            name: /Carga Masiva/i,
+          })
+          .click();
 
-        // const fileInput = pageMozartia.locator(
-        //   'input[type="file"][accept*=".xlsx"]',
-        // );
+        const fileInput = pageMozartia.locator(
+          'input[type="file"][accept*=".xlsx"]',
+        );
 
-        // await fileInput.waitFor({ state: "visible" });
+        await fileInput.waitFor({ state: "visible" });
 
-        // await fileInput.setInputFiles({
-        //   name: "autorizaciones.xlsx",
-        //   mimeType:
-        //     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        //   buffer: buffer,
-        // });
+        await fileInput.setInputFiles({
+          name: "autorizaciones.xlsx",
+          mimeType:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          buffer: buffer,
+        });
 
-        // const cargarBtn = pageMozartia.getByRole("button", {
-        //   name: /Cargar Archivo/i,
-        // });
+        const cargarBtn = pageMozartia.getByRole("button", {
+          name: /Cargar Archivo/i,
+        });
 
-        // await pageMozartia
-        //   .locator('button:not([disabled]):has-text("Cargar Archivo")')
-        //   .waitFor({ state: "visible", timeout: 15000 });
+        await pageMozartia
+          .locator('button:not([disabled]):has-text("Cargar Archivo")')
+          .waitFor({ state: "visible", timeout: 15000 });
 
-        // await cargarBtn.click();
-        // console.log("✅ Excel subido a Mozart");
+        await cargarBtn.click();
+        console.log("✅ Excel subido a Mozart");
 
         // if (sesionExpirada) await client.sessions.stop(session.id);
 
-        resultadoFinal = {
-          documento: documento,
+        return res.status(200).json({
+          documento,
           estado: "completado",
           puedeAgendar: filaTabla.puedeAgendar,
-          motivo: filaTabla.motivo,
+          motivo: filaTabla.motivo ?? "",
           datos: filaTabla,
-          filasExcel: filasExcel,
-          timestamp: new Date().toISOString()
-        };
-
-        // Guardar resultado final en cache
-        await guardarResultadoEnCache(documento, resultadoFinal);
-        
-        console.log(`✅ Proceso completado para documento ${documento}`);
+          filasExcel
+        });
 
       } catch (err) {
-        console.error("❌ Error en proceso asíncrono:", err);
-        resultadoFinal = {
-          documento: documento,
+        console.error("❌ Error:", err.message);
+        return res.status(500).json({
+          documento,
           estado: "error",
           puedeAgendar: false,
           motivo: "Error al procesar la solicitud",
           error: err.message,
-          timestamp: new Date().toISOString()
-        };
-        
-        // Guardar error en cache
-        await guardarResultadoEnCache(documento, resultadoFinal);
-      }
-    })();
-
-  } catch (err) {
-    console.error("❌ Error:", err.message);
-    if (!res.headersSent)
-      res.status(500).json({ mensaje: "Error al iniciar el proceso", error: err.message });
+          timestamp: new Date().toISOString(),
+      });
   }
 };
 
