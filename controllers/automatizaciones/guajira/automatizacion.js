@@ -903,11 +903,6 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
         profile: { id: profileId, persistChanges: true }
       });
 
-      res.status(200).json({
-        mensaje: "Proceso iniciado",
-        liveUrl: session.liveUrl,
-      });
-
       browser = await chromium.connectOverCDP(session.wsEndpoint);
       context = browser.contexts()[0];
       page = context.pages()[0];
