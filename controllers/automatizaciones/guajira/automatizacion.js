@@ -235,7 +235,11 @@ export const AutorizacionGuajiraInicial = async (req, res) => {
 
 
 export const AutorizacionGuajira = async (req, res) => {
-  const { documento, profileId, usuario, clave, tipoDocumento, tenant } = req.body;
+  const { documento, tipoDocumento, tenant } = req.body;
+
+  const profileId = process.env.profileIdGuajiraVALIDOR
+  const usuario = process.env.USUARIOGUAJIRAVALIDOR
+  const clave = process.env.CLAVEGUAJIRAVALIDOR
 
   let session, browser, page;
   const cupsPermitidos = new Set([
@@ -561,7 +565,7 @@ export const AutorizacionGuajira = async (req, res) => {
         }
 
         // console.log("✅ Fila lista para la tabla:", JSON.stringify(filaTabla, null, 2));
-        
+
         const filasExcel = transformarAutorizacionesGuajira(filaTabla);
         const buffer = generarExcelBuffer(filasExcel);
 
