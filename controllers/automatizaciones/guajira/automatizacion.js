@@ -661,6 +661,20 @@ export const AutorizacionGuajira = async (req, res) => {
           error: err.message,
           timestamp: new Date().toISOString(),
       });
+      
+  } finally {
+    console.log("🔒 Cerrando sesión Hyperbrowser...");
+    try {
+      if (browser) await browser.close();
+    } catch (e) {
+      console.log("Error cerrando browser:", e.message);
+    }
+    try {
+      if (session) await client.sessions.stop(session.id);
+      console.log("✅ Sesión cerrada correctamente");
+    } catch (e) {
+      console.log("Error cerrando sesión:", e.message);
+    }
   }
 };
 
@@ -827,9 +841,9 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
   const [fechaCitaFormateada, fechaAutorizacionFormateada, fechaVencimientoFormateada] =
   [fechaCita, fechaAutorizacion, fechaVencimiento].map(f => f.split('/').reverse().join('-'));
 
-  const usuario = process.env.USUARIOGUAJIRA
-  const clave = process.env.CLAVEGUAJIRA
-  const profileId = process.env.profileIdGuajira
+  const usuario = process.env.USUARIOGUAJIRACRISTAL
+  const clave = process.env.CLAVEGUAJIRACRISTAL
+  const profileId = process.env.profileIdGuajiraCRISTAL
 
 
   try {
