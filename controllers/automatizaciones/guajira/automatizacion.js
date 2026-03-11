@@ -309,7 +309,9 @@ export const AutorizacionGuajira = async (req, res) => {
         await page.locator("label", { hasText: "Tipo y Num Identificación" }).click();
         await page.waitForTimeout(2000);
         await page.locator("#formaVDGeneral\\:selectOneTipoDoc").selectOption({ label: tipoDocumento });
+        await page.waitForTimeout(2000);
         await page.fill("#formaVDGeneral\\:numDocumento", documento);
+        await page.waitForTimeout(1000);
         await page.locator("#formaVDGeneral\\:j_id77").click();
         await page.waitForTimeout(3000);
 
@@ -841,9 +843,9 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
   const [fechaCitaFormateada, fechaAutorizacionFormateada, fechaVencimientoFormateada] =
   [fechaCita, fechaAutorizacion, fechaVencimiento].map(f => f.split('/').reverse().join('-'));
 
-  const usuario = process.env.USUARIOGUAJIRACRISTAL
-  const clave = process.env.CLAVEGUAJIRACRISTAL
-  const profileId = process.env.profileIdGuajiraCRISTAL
+  const usuario = process.env.USUARIOGUAJIRA
+  const clave = process.env.CLAVEGUAJIRA
+  const profileId = process.env.profileIdGuajira
 
 
   try {
