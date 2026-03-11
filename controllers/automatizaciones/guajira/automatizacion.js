@@ -847,10 +847,13 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
   const clave = process.env.CLAVEGUAJIRA
   const profileId = process.env.profileIdGuajira
 
+  let session = null;
+  let browser = null;
+  let procesando = true;
 
   try {
     // Intentar con el perfil existente
-    let session = await client.sessions.create({ 
+    session = await client.sessions.create({ 
       acceptCookies: true,
       profile: {
         id: profileId,
@@ -858,10 +861,9 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
       }
     });
 
-    let browser = await chromium.connectOverCDP(session.wsEndpoint);
+    browser = await chromium.connectOverCDP(session.wsEndpoint);
     let context = browser.contexts()[0];
     let page = context.pages()[0];
-    let procesando = true;
 
     const manejarModalActualizacion = (paginaActual) => {
       (async () => {
@@ -935,9 +937,6 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
 
       console.log("✅ Perfil renovado con nueva sesión");
     }
-
-    (async () => {
-      try {
 
         // Continuar con el flujo normal
         await page.goto("https://api-test.qrystalos.com/#/ce", {
@@ -1183,19 +1182,25 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
 
         procesando = false;
 
+        res.status(200).json({ mensaje: "Cita agendada exitosamente" });
+
        
       } catch (error) {
-        console.error("Error en proceso asíncrono:", error);
-      }
-    })();
-  } catch (error) {
-    console.error("❌ Error:", error.message);
-
-    if (!res.headersSent) {
-      res.status(500).json({
-        mensaje: "Error al iniciar el proceso",
-        error: error.message,
-      });
+        console.error("❌ Error:", error.message);
+        if (!res.headersSent) {
+          res.status(500).json({
+            mensaje: "Error al agendar la cita",
+            error: error.message,
+          });
+        }
+  }finally {
+    procesando = false;
+    try {
+      if (browser) await browser.close();
+      if (session) await client.sessions.stop(session.id);
+      console.log("✅ Sesión cerrada correctamente");
+    } catch (e) {
+      console.error("⚠️ Error al cerrar sesión:", e.message);
     }
   }
 }
