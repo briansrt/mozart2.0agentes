@@ -578,9 +578,15 @@ export const AutorizacionGuajira = async (req, res) => {
           waitUntil: "networkidle",
         });
 
+        // elegir email según tenant
+        const emailMozart =
+          tenant === "cemdiprueba"
+            ? process.env.mozartEmailCemdiPrueba
+            : process.env.mozartEmail;
+
         await pageMozartia
           .locator('input[name="email"]')
-          .fill(process.env.mozartEmail);
+          .fill(emailMozart);
         await pageMozartia
           .locator('input[name="password"]')
           .fill(process.env.mozartPassword);
