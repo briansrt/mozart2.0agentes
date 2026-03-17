@@ -569,86 +569,100 @@ export const AutorizacionGuajira = async (req, res) => {
         // console.log("✅ Fila lista para la tabla:", JSON.stringify(filaTabla, null, 2));
 
         const filasExcel = transformarAutorizacionesGuajira(filaTabla);
-        const buffer = generarExcelBuffer(filasExcel);
+        if (filaTabla.puedeAgendar) {
+          const buffer = generarExcelBuffer(filasExcel);
 
-        const contextGlobal = browser.contexts()[0];
-        const pageMozartia = await contextGlobal.newPage();
+          const contextGlobal = browser.contexts()[0];
+          const pageMozartia = await contextGlobal.newPage();
 
-        await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}/login`, {
-          waitUntil: "networkidle",
-        });
+          await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}/login`, {
+            waitUntil: "networkidle",
+          });
 
-        // elegir email según tenant
-        const emailMozart =
-          tenant === "cemdiprueba"
-            ? process.env.mozartEmailCemdiPrueba
-            : process.env.mozartEmail;
+          // elegir email según tenant
+          const emailMozart =
+            tenant === "cemdiprueba"
+              ? process.env.mozartEmailCemdiPrueba
+              : process.env.mozartEmail;
 
-        await pageMozartia
-          .locator('input[name="email"]')
-          .fill(emailMozart);
-        await pageMozartia
-          .locator('input[name="password"]')
-          .fill(process.env.mozartPassword);
-        await pageMozartia
-          .getByRole("button", { name: /Acceder al Sistema/i })
-          .click();
+          await pageMozartia
+            .locator('input[name="email"]')
+            .fill(emailMozart);
+          await pageMozartia
+            .locator('input[name="password"]')
+            .fill(process.env.mozartPassword);
+          await pageMozartia
+            .getByRole("button", { name: /Acceder al Sistema/i })
+            .click();
 
-        await pageMozartia.waitForFunction(
-          (tenant) => {
-            return (
-              location.pathname.startsWith(`/${tenant}`) ||
-              location.pathname.startsWith("/medical-authorizations")
-            );
-          },
-          tenant,
-          { timeout: 60000 },
-        );
+          await pageMozartia.waitForFunction(
+            (tenant) => {
+              return (
+                location.pathname.startsWith(`/${tenant}`) ||
+                location.pathname.startsWith("/medical-authorizations")
+              );
+            },
+            tenant,
+            { timeout: 60000 },
+          );
 
-        await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
+          await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
 
-        await pageMozartia.goto(
-          "https://new.app.mozartia.com/cemdiprueba/medical-authorizations",
-          { waitUntil: "networkidle" },
-        );
+          await pageMozartia.goto(
+            "https://new.app.mozartia.com/cemdiprueba/medical-authorizations",
+            { waitUntil: "networkidle" },
+          );
 
-        await pageMozartia
-          .getByRole("button", {
-            name: /Carga Masiva/i,
-          })
-          .waitFor({ state: "visible" });
+          await pageMozartia
+            .getByRole("button", {
+              name: /Carga Masiva/i,
+            })
+            .waitFor({ state: "visible" });
 
-        await pageMozartia
-          .getByRole("button", {
-            name: /Carga Masiva/i,
-          })
-          .click();
+          await pageMozartia
+            .getByRole("button", {
+              name: /Carga Masiva/i,
+            })
+            .click();
 
-        const fileInput = pageMozartia.locator(
-          'input[type="file"][accept*=".xlsx"]',
-        );
+          const fileInput = pageMozartia.locator(
+            'input[type="file"][accept*=".xlsx"]',
+          );
 
-        await fileInput.waitFor({ state: "visible" });
+          await fileInput.waitFor({ state: "visible" });
 
-        await fileInput.setInputFiles({
-          name: "autorizaciones.xlsx",
-          mimeType:
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-          buffer: buffer,
-        });
+          await fileInput.setInputFiles({
+            name: "autorizaciones.xlsx",
+            mimeType:
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            buffer: buffer,
+          });
 
-        const cargarBtn = pageMozartia.getByRole("button", {
-          name: /Cargar Archivo/i,
-        });
+          const cargarBtn = pageMozartia.getByRole("button", {
+            name: /Cargar Archivo/i,
+          });
 
-        await pageMozartia
-          .locator('button:not([disabled]):has-text("Cargar Archivo")')
-          .waitFor({ state: "visible", timeout: 15000 });
+          await pageMozartia
+            .locator('button:not([disabled]):has-text("Cargar Archivo")')
+            .waitFor({ state: "visible", timeout: 15000 });
 
-        await cargarBtn.click();
-        console.log("✅ Excel subido a Mozart");
+          await cargarBtn.click();
+          console.log("✅ Excel subido a Mozart");
+
+        } else {
+          console.log("⏭️ Paciente no puede agendar, se omite carga a Mozart:", filaTabla.motivo);
+        }
+
 
         // if (sesionExpirada) await client.sessions.stop(session.id);
+
+        console.log({
+          documento,
+          estado: "completado",
+          puedeAgendar: filaTabla.puedeAgendar,
+          motivo: filaTabla.motivo ?? "",
+          datos: filaTabla,
+        })
 
         return res.status(200).json({
           documento,
@@ -656,7 +670,6 @@ export const AutorizacionGuajira = async (req, res) => {
           puedeAgendar: filaTabla.puedeAgendar,
           motivo: filaTabla.motivo ?? "",
           datos: filaTabla,
-          filasExcel
         });
 
       } catch (err) {
@@ -844,7 +857,13 @@ export const AgendarCitaGuajiraCristaInicial = async (req, res) => {
 }
 
 export const AgendarCitaGuajiraCristal = async (req, res) => {
-  const { documento, fechaCita, horaCita, centroCosto, codigoServicio, tipoAtencion, numeroAutorizacion, fechaAutorizacion, fechaVencimiento, copago, valorCopago, tipoCopago, valorCita, observaciones, acompanante,responsable } = req.body
+  const {
+    documento, fechaCita, horaCita, centroCosto, codigoServicio, tipoAtencion,
+    numeroAutorizacion, fechaAutorizacion, fechaVencimiento, copago, valorCopago,
+    tipoCopago, valorCita, observaciones, acompanante, responsable,
+    // Campos Mozart
+    doctorId, tipo, tenant, pacienteId, especialidad, autorizacionId, sedeId
+  } = req.body;
 
   const [fechaCitaFormateada, fechaAutorizacionFormateada, fechaVencimientoFormateada] =
   [fechaCita, fechaAutorizacion, fechaVencimiento].map(f => f.split('/').reverse().join('-'));
@@ -1180,12 +1199,250 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
 
         await botonAgendar.waitFor({ state: 'visible' });
         await botonAgendar.click();
+        await page.waitForTimeout(2000);
+
+        console.log("✅ Cita agendada en Cristal exitosamente");
+        
+
+        // ─────────────────────────────────────────────
+        // 🎵 PASO 2: Agendar en Mozart
+        // Solo se ejecuta si Cristal fue exitoso
+        // ─────────────────────────────────────────────
+        console.log("🎵 Agendando en Mozart...");
+
+        const mozartResponse = await fetch("https://new.api.mozartia.com/api/external/appointment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": "mozart-external-api-2024"
+          },
+          body: JSON.stringify({
+            hora: horaCita,
+            doctorId,
+            tipo,
+            tenant,
+            pacienteId,
+            fecha: fechaCitaFormateada,
+            especialidad,
+            autorizacionId,
+            sedeId,
+          })
+        });
+
+        if (!mozartResponse.ok) {
+          const errorMozart = await mozartResponse.text();
+          console.error("❌ Mozart falló:", errorMozart);
+
+          // Cristal quedó agendada, Mozart no — retornar advertencia con detalle
+          return res.status(207).json({
+            mensaje: "Cita agendada en Cristal pero falló en Mozart",
+            cristal: "agendado",
+            mozart: "fallido",
+            mozartStatus: mozartResponse.status,
+            mozartError: errorMozart
+          });
+        }
+
+        const mozartData = await mozartResponse.json();
+        console.log("✅ Cita agendada en Mozart exitosamente");
+
 
         procesando = false;
 
-        res.status(200).json({ mensaje: "Cita agendada exitosamente" });
+        console.log("Cita agendada exitosamente en Cristal y Mozart")
+
+        return res.status(200).json({
+          mensaje: "Cita agendada exitosamente en Cristal y Mozart",
+          cristal: "agendado",
+          mozart: "agendado",
+          mozartData
+        });
 
        
+      } catch (error) {
+        console.error("❌ Error:", error.message);
+        if (!res.headersSent) {
+          res.status(500).json({
+            mensaje: "Error al agendar la cita",
+            error: error.message,
+          });
+        }
+  }finally {
+    procesando = false;
+    try {
+      if (browser) await browser.close();
+      if (session) await client.sessions.stop(session.id);
+      console.log("✅ Sesión cerrada correctamente");
+    } catch (e) {
+      console.error("⚠️ Error al cerrar sesión:", e.message);
+    }
+  }
+}
+
+
+export const ReAgendarCitaGuajiraCristal = async (req, res) => {
+  const { fechaAntigua, horaAntigua, nuevaFecha, nuevaHora, observacion } = req.body
+
+  const [fechaAntiguaInput] =
+  [fechaAntigua].map(f => f.split('/').reverse().join('-'));
+  const usuario = process.env.USUARIOGUAJIRA
+  const clave = process.env.CLAVEGUAJIRA
+  const profileId = process.env.profileIdGuajira
+
+  let session = null;
+  let browser = null;
+  let procesando = true;
+
+  try {
+    // Intentar con el perfil existente
+    session = await client.sessions.create({ 
+      acceptCookies: true,
+      profile: {
+        id: profileId,
+        persistChanges: true,
+      }
+    });
+
+    browser = await chromium.connectOverCDP(session.wsEndpoint);
+    let context = browser.contexts()[0];
+    let page = context.pages()[0];
+
+    const manejarModalActualizacion = (paginaActual) => {
+      (async () => {
+        while (procesando) {
+          try {
+            const btnPostergar = paginaActual.locator('.q-dialog button span.block', {
+              hasText: 'Postergar'
+            }).first();
+            if (await btnPostergar.count() > 0) {
+              console.log("🔔 Modal de actualización detectado - Postergando...");
+              await btnPostergar.click();
+            }
+          } catch (e) {}
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      })();
+    };
+
+    manejarModalActualizacion(page);
+
+    await page.goto("https://api-test.qrystalos.com/#/ce", { waitUntil: "networkidle" });
+
+    const sesionExpirada = await detectarSesionExpiradaCristal(page);
+
+    if (sesionExpirada) {
+      console.log("⚠️ Sesión expirada - Renovando perfil...");
+      procesando = false;
+
+      await browser.close();
+      await client.sessions.stop(session.id);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // 🔑 Nueva sesión con el liveUrl correcto
+      session = await client.sessions.create({
+        acceptCookies: true,
+        saveDownloads: true,
+        profile: { id: profileId, persistChanges: true }
+      });
+
+      browser = await chromium.connectOverCDP(session.wsEndpoint);
+      context = browser.contexts()[0];
+      page = context.pages()[0];
+
+      procesando = true;
+      manejarModalActualizacion(page);
+
+      // Login
+      await page.goto("https://api-test.qrystalos.com/#/autenticarse");
+
+      const selectorInput = 'input[aria-label="Organización *"]';
+      await page.click(selectorInput);
+      await page.fill(selectorInput, 'Pruebas Clinica esperanza');
+      await page.waitForSelector('div.q-item span:has-text("Pruebas Clinica esperanza")');
+      await page.click('div.q-item span:has-text("Pruebas Clinica esperanza")');
+
+      const usuarioInput = page.locator('input[aria-label="Usuario *"]').first();
+      await usuarioInput.waitFor({ state: 'attached' });
+      await usuarioInput.fill(usuario);
+
+      const claveInput = page.locator('input[aria-label="Clave Secreta *"]').first();
+      await claveInput.waitFor({ state: 'attached' });
+      await claveInput.fill(clave);
+
+      await page.click('button:has-text("Continuar")');
+      await page.waitForLoadState("networkidle");
+
+      console.log("✅ Perfil renovado con nueva sesión");
+    }
+
+        // Continuar con el flujo normal
+        await page.goto("https://api-test.qrystalos.com/#/ce", {
+          waitUntil: "networkidle"
+        });
+
+        await page.waitForTimeout(3000);
+
+        await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
+          waitUntil: "networkidle"
+        });
+
+        console.log("✅ Entró a Agenda correctamente");
+
+        const fechaInput = page.locator('input[aria-label="Fecha"]');
+        await fechaInput.fill(fechaAntiguaInput);
+
+        const especialidad = page.locator('input[aria-label="Seleccione una especialidad"]');
+        await especialidad.click();
+        await especialidad.fill('PERINATOLOGÍA');
+
+        // esperar opción
+        const opcion = page.locator('.q-menu .q-item', {
+          hasText: 'PERINATOLOGÍA O MEDICINA FETAL'
+        }).first();
+
+        await opcion.waitFor();
+        await opcion.click();
+
+        await page.waitForTimeout(1500);
+        await page.getByRole('button', { name: 'Ocupado' }).click();
+
+        const fila = page.locator('tr.q-tr', {
+          has: page.locator('td span', { hasText: horaAntigua })
+        });
+        await fila.locator('td.cursor-pointer').click();
+        await page.waitForTimeout(1000);
+        await page.locator('button:has(i.material-icons:text("event_repeat"))').click();
+        await page.waitForTimeout(1000);
+
+        await seleccionarCita(page, nuevaFecha, nuevaHora);
+
+        const selectMotivo = page.locator('label:has-text("Motivo Re-programación:") input[role="combobox"]');
+        await selectMotivo.waitFor();
+
+        // Hacer click para abrir el dropdown
+        await selectMotivo.click();
+
+        // Escribir la opción que queremos seleccionar
+        await selectMotivo.fill('Reprogramado por paciente');
+
+        // Esperar que aparezca la opción en la lista y hacer click
+        const opcionReprog = page.locator('.q-menu .q-item', {
+          hasText: 'Reprogramado por paciente'
+        }).first();
+        await opcionReprog.waitFor();
+        await opcionReprog.click();
+
+        const inputObservacion = page.locator('input[aria-label="Observación"]');
+        await inputObservacion.waitFor();
+        await inputObservacion.fill(observacion);
+
+        const botonReagendar = page.locator('button:has-text("Re-programar Cita")');
+        await botonReagendar.waitFor();
+        await botonReagendar.click();
+        await page.waitForTimeout(2000);
+
+        console.log("✅ Cita reprogramada correctamente");
+
       } catch (error) {
         console.error("❌ Error:", error.message);
         if (!res.headersSent) {
