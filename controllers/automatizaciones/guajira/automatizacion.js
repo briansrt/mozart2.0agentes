@@ -609,7 +609,7 @@ export const AutorizacionGuajira = async (req, res) => {
           await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
 
           await pageMozartia.goto(
-            "https://new.app.mozartia.com/cemdiprueba/medical-authorizations",
+            `https://new.app.mozartia.com/${tenant}/medical-authorizations`,
             { waitUntil: "networkidle" },
           );
 
@@ -963,7 +963,7 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
           waitUntil: "networkidle"
         });
 
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(1500);
 
         await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
           waitUntil: "networkidle"
@@ -1023,9 +1023,9 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
 
         await opcion.waitFor();
         await opcion.click();
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(2000);
         await page.locator('input[aria-label="Fecha Inicial"]').fill(fechaCitaFormateada);
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(2000);
         await page.locator('input[aria-label="Fecha final"]').fill(fechaCitaFormateada);
 
         const valor = await page.locator('input[aria-label="Fecha Inicial"]').inputValue();
@@ -1033,7 +1033,7 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
 
         await seleccionarCita(page, fechaCita, horaCita);
 
-        await page.waitForTimeout(4000);
+        await page.waitForTimeout(2500);
 
         if (centroCosto) {
           // 1️⃣ Ubicar input del select
@@ -1214,7 +1214,7 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": "mozart-external-api-2024"
+            "x-api-key": process.env.MOZART_API_KEY
           },
           body: JSON.stringify({
             hora: horaCita,
@@ -1281,10 +1281,10 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
 
 
 export const ReAgendarCitaGuajiraCristal = async (req, res) => {
-  const { fechaAntigua, horaAntigua, nuevaFecha, nuevaHora, observacion } = req.body
+  const { fechaAntigua, horaAntigua, nuevaFecha, nuevaHora, observacion, especialidad, pacienteId, tenant, tipo, doctorId, citaIdOriginal } = req.body
 
-  const [fechaAntiguaInput] =
-  [fechaAntigua].map(f => f.split('/').reverse().join('-'));
+  const [fechaAntiguaInput, nuevaFechaFormateada] =
+  [fechaAntigua, nuevaFecha].map(f => f.split('/').reverse().join('-'));
   const usuario = process.env.USUARIOGUAJIRA
   const clave = process.env.CLAVEGUAJIRA
   const profileId = process.env.profileIdGuajira
@@ -1391,9 +1391,9 @@ export const ReAgendarCitaGuajiraCristal = async (req, res) => {
         const fechaInput = page.locator('input[aria-label="Fecha"]');
         await fechaInput.fill(fechaAntiguaInput);
 
-        const especialidad = page.locator('input[aria-label="Seleccione una especialidad"]');
-        await especialidad.click();
-        await especialidad.fill('PERINATOLOGÍA');
+        const especialidadInput = page.locator('input[aria-label="Seleccione una especialidad"]');
+        await especialidadInput.click();
+        await especialidadInput.fill('PERINATOLOGÍA');
 
         // esperar opción
         const opcion = page.locator('.q-menu .q-item', {
@@ -1439,9 +1439,59 @@ export const ReAgendarCitaGuajiraCristal = async (req, res) => {
         const botonReagendar = page.locator('button:has-text("Re-programar Cita")');
         await botonReagendar.waitFor();
         await botonReagendar.click();
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(2500);
 
         console.log("✅ Cita reprogramada correctamente");
+
+        //MOZART REAGENDAMIENTO
+
+        const mozartResponse = await fetch("https://new.api.mozartia.com/api/external/reschedule-appointment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": process.env.MOZART_API_KEY
+          },
+          body: JSON.stringify({
+            hora: nuevaHora,
+            doctorId,
+            tipo,
+            tenant,
+            pacienteId,
+            fecha: nuevaFechaFormateada,
+            especialidad,
+            citaIdOriginal,
+            motivo: observacion,
+            especialidad
+          })
+        });
+
+        if (!mozartResponse.ok) {
+          const errorMozart = await mozartResponse.text();
+          console.error("❌ Mozart falló:", errorMozart);
+
+          // Cristal quedó agendada, Mozart no — retornar advertencia con detalle
+          return res.status(207).json({
+            mensaje: "Cita reagendada en Cristal pero falló en Mozart",
+            cristal: "reagendado",
+            mozart: "fallido",
+            mozartStatus: mozartResponse.status,
+            mozartError: errorMozart
+          });
+        }
+
+        const mozartData = await mozartResponse.json();
+        console.log("✅ Cita reagendada en Mozart exitosamente");
+
+        procesando = false;
+
+        console.log("Cita reagendada exitosamente en Cristal y Mozart")
+
+        return res.status(200).json({
+          mensaje: "Cita reagendada exitosamente en Cristal y Mozart",
+          cristal: "reagendado",
+          mozart: "reagendado",
+          mozartData
+        });
 
       } catch (error) {
         console.error("❌ Error:", error.message);
@@ -1461,4 +1511,229 @@ export const ReAgendarCitaGuajiraCristal = async (req, res) => {
       console.error("⚠️ Error al cerrar sesión:", e.message);
     }
   }
+}
+
+export const CancelarCitaGuajiraCristal = async (req, res) => {
+  const { fecha, hora, observacion, citaId, tenant } = req.body
+
+  const [fechaCancelar ] =
+  [fecha].map(f => f.split('/').reverse().join('-'));
+  const usuario = process.env.USUARIOGUAJIRA
+  const clave = process.env.CLAVEGUAJIRA
+  const profileId = process.env.profileIdGuajira
+
+  let session = null;
+  let browser = null;
+  let procesando = true;
+
+  try {
+    // Intentar con el perfil existente
+    session = await client.sessions.create({ 
+      acceptCookies: true,
+      profile: {
+        id: profileId,
+        persistChanges: true,
+      }
+    });
+
+    browser = await chromium.connectOverCDP(session.wsEndpoint);
+    let context = browser.contexts()[0];
+    let page = context.pages()[0];
+
+    const manejarModalActualizacion = (paginaActual) => {
+      (async () => {
+        while (procesando) {
+          try {
+            const btnPostergar = paginaActual.locator('.q-dialog button span.block', {
+              hasText: 'Postergar'
+            }).first();
+            if (await btnPostergar.count() > 0) {
+              console.log("🔔 Modal de actualización detectado - Postergando...");
+              await btnPostergar.click();
+            }
+          } catch (e) {}
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      })();
+    };
+
+    manejarModalActualizacion(page);
+
+    await page.goto("https://api-test.qrystalos.com/#/ce", { waitUntil: "networkidle" });
+
+    const sesionExpirada = await detectarSesionExpiradaCristal(page);
+
+    if (sesionExpirada) {
+      console.log("⚠️ Sesión expirada - Renovando perfil...");
+      procesando = false;
+
+      await browser.close();
+      await client.sessions.stop(session.id);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      // 🔑 Nueva sesión con el liveUrl correcto
+      session = await client.sessions.create({
+        acceptCookies: true,
+        saveDownloads: true,
+        profile: { id: profileId, persistChanges: true }
+      });
+
+      browser = await chromium.connectOverCDP(session.wsEndpoint);
+      context = browser.contexts()[0];
+      page = context.pages()[0];
+
+      procesando = true;
+      manejarModalActualizacion(page);
+
+      // Login
+      await page.goto("https://api-test.qrystalos.com/#/autenticarse");
+
+      const selectorInput = 'input[aria-label="Organización *"]';
+      await page.click(selectorInput);
+      await page.fill(selectorInput, 'Pruebas Clinica esperanza');
+      await page.waitForSelector('div.q-item span:has-text("Pruebas Clinica esperanza")');
+      await page.click('div.q-item span:has-text("Pruebas Clinica esperanza")');
+
+      const usuarioInput = page.locator('input[aria-label="Usuario *"]').first();
+      await usuarioInput.waitFor({ state: 'attached' });
+      await usuarioInput.fill(usuario);
+
+      const claveInput = page.locator('input[aria-label="Clave Secreta *"]').first();
+      await claveInput.waitFor({ state: 'attached' });
+      await claveInput.fill(clave);
+
+      await page.click('button:has-text("Continuar")');
+      await page.waitForLoadState("networkidle");
+
+      console.log("✅ Perfil renovado con nueva sesión");
+    }
+
+        // Continuar con el flujo normal
+        await page.goto("https://api-test.qrystalos.com/#/ce", {
+          waitUntil: "networkidle"
+        });
+
+        await page.waitForTimeout(3000);
+
+        await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
+          waitUntil: "networkidle"
+        });
+
+        console.log("✅ Entró a Agenda correctamente");
+
+        const fechaInput = page.locator('input[aria-label="Fecha"]');
+        await fechaInput.fill(fechaCancelar);
+
+        const especialidad = page.locator('input[aria-label="Seleccione una especialidad"]');
+        await especialidad.click();
+        await especialidad.fill('PERINATOLOGÍA');
+
+        // esperar opción
+        const opcion = page.locator('.q-menu .q-item', {
+          hasText: 'PERINATOLOGÍA O MEDICINA FETAL'
+        }).first();
+
+        await opcion.waitFor();
+        await opcion.click();
+
+        await page.waitForTimeout(1500);
+        await page.getByRole('button', { name: 'Ocupado' }).click();
+
+        const fila = page.locator('tr.q-tr', {
+          has: page.locator('td span', { hasText: hora })
+        });
+        await fila.locator('td.cursor-pointer').click();
+        await page.waitForTimeout(1000);
+        await page.locator('button:has(i.material-icons:text("block"))').click();
+        await page.waitForTimeout(1000);
+
+        const selectCausa = page.locator('label:has-text("Causas (*)") input[role="combobox"]');
+        await selectCausa.waitFor();
+
+        // Hacer click para abrir el dropdown
+        await selectCausa.click();
+
+        // Escribir la opción que queremos seleccionar
+        await selectCausa.fill('CANCELADA POR PACIENTE');
+
+        // Esperar que aparezca la opción en la lista y hacer click
+        const opcionCanc = page.locator('.q-menu .q-item', {
+          hasText: 'CANCELADA POR PACIENTE'
+        }).first();
+        await opcionCanc.waitFor();
+        await opcionCanc.click();
+
+        await page.getByRole('textbox', { name: 'Observación' }).fill(observacion);
+
+        const botonReagendar = page.locator('button:has-text("Cancelar Cita")');
+        await botonReagendar.waitFor();
+        await botonReagendar.click();
+        await page.waitForTimeout(2500);
+
+        console.log("✅ Cita Cancelada correctamente");
+
+        //MOZART REAGENDAMIENTO
+
+        const mozartResponse = await fetch("https://new.api.mozartia.com/api/external/cancel-appointment", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": process.env.MOZART_API_KEY
+          },
+          body: JSON.stringify({
+            hora,
+            citaId,
+            notas: observacion,
+            tenant
+          })
+        });
+
+        if (!mozartResponse.ok) {
+          const errorMozart = await mozartResponse.text();
+          console.error("❌ Mozart falló:", errorMozart);
+
+          // Cristal quedó agendada, Mozart no — retornar advertencia con detalle
+          return res.status(207).json({
+            mensaje: "Cita cancelada en Cristal pero falló en Mozart",
+            cristal: "cancelado",
+            mozart: "fallido",
+            mozartStatus: mozartResponse.status,
+            mozartError: errorMozart
+          });
+        }
+
+        const mozartData = await mozartResponse.json();
+        console.log("✅ Cita cancelada en Mozart exitosamente");
+
+        procesando = false;
+
+        console.log("Cita cancelada exitosamente en Cristal y Mozart")
+
+        return res.status(200).json({
+          mensaje: "Cita cancelada exitosamente en Cristal y Mozart",
+          cristal: "cancelado",
+          mozart: "cancelado",
+          mozartData
+        });
+
+
+      } catch (error) {
+        console.error("❌ Error:", error.message);
+        if (!res.headersSent) {
+          res.status(500).json({
+            mensaje: "Error al agendar la cita",
+            error: error.message,
+          });
+        }
+  }finally {
+    procesando = false;
+    try {
+      if (browser) await browser.close();
+      if (session) await client.sessions.stop(session.id);
+      console.log("✅ Sesión cerrada correctamente");
+    } catch (e) {
+      console.error("⚠️ Error al cerrar sesión:", e.message);
+    }
+  }
+
 }
