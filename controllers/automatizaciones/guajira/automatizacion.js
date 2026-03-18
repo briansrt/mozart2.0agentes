@@ -439,7 +439,7 @@ export const AutorizacionGuajira = async (req, res) => {
 
               for (const aut of autorizacionesValidas) {
                 const autBase = {
-                  fechaExpedicion: aut.fechaAprobacion, //CAMBIO
+                  fechaExpedicion: aut.fechaVigencia, //CAMBIO
                   servicio: `${aut.codigo} - ${aut.descripcion}`,
                   numeroAutorizacion: aut.numeroAutorizacion,
                   numeroRadicacion: aut.numeroAutorizacion,
@@ -571,6 +571,7 @@ export const AutorizacionGuajira = async (req, res) => {
         const filasExcel = transformarAutorizacionesGuajira(filaTabla);
         if (filaTabla.puedeAgendar) {
           const buffer = generarExcelBuffer(filasExcel);
+          console.log("filas excel construido: ", filasExcel)
 
           const contextGlobal = browser.contexts()[0];
           const pageMozartia = await contextGlobal.newPage();
@@ -647,6 +648,7 @@ export const AutorizacionGuajira = async (req, res) => {
             .waitFor({ state: "visible", timeout: 15000 });
 
           await cargarBtn.click();
+          await page.waitForTimeout(2500);
           console.log("✅ Excel subido a Mozart");
 
         } else {
