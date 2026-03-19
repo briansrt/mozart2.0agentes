@@ -51,7 +51,7 @@ export const transformarAutorizacionesGuajira = (filaTabla) => {
   return filaTabla.autorizaciones.map((aut) => ({
     "Cédula *": filaTabla.cedula || "",
     "Nombres *": filaTabla.nombres || "",
-    "Fecha de Expedición *": aut.fechaExpedicion || "",
+    "Fecha de Expedición *": aut.fechaAutorizacion || "",
     "Servicio *": aut.servicio || "",
     "Número de Autorización": aut.numeroAutorizacion || "",
     "Número de Radicación *": aut.numeroRadicacion || "",
