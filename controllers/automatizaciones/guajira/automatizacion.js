@@ -865,7 +865,7 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
     numeroAutorizacion, fechaAutorizacion, fechaVencimiento, copago, valorCopago,
     tipoCopago, valorCita, observaciones, acompanante, responsable,
     // Campos Mozart
-    doctorId, tipo, tenant, pacienteId, especialidad, autorizacionId, sedeId
+    doctorId, tipo, tenant, pacienteId, especialidad, autorizacionId, sedeId, citaId
   } = req.body;
 
   const [fechaCitaFormateada, fechaAutorizacionFormateada, fechaVencimientoFormateada] =
@@ -1229,6 +1229,7 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
             especialidad,
             autorizacionId,
             sedeId,
+            citaId,
           })
         });
 
