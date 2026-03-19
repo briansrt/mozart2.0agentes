@@ -439,6 +439,7 @@ export const AutorizacionGuajira = async (req, res) => {
 
               for (const aut of autorizacionesValidas) {
                 const autBase = {
+                  fechaAutorizacion: aut.fechaAprobacion,
                   fechaExpedicion: aut.fechaVigencia, //CAMBIO
                   servicio: `${aut.codigo} - ${aut.descripcion}`,
                   numeroAutorizacion: aut.numeroAutorizacion,
