@@ -1034,7 +1034,16 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
         const valor = await page.locator('input[aria-label="Fecha Inicial"]').inputValue();
         console.log(valor);
 
-        await seleccionarCita(page, fechaCita, horaCita);
+        const citaEncontrada = await seleccionarCita(page, fechaCita, horaCita);
+
+        if (!citaEncontrada) {
+          return res.status(404).json({
+            mensaje: "La fecha u hora solicitada no está disponible en Qrystal",
+            fechaSolicitada: fechaCita,
+            horaSolicitada: horaCita,
+            disponible: false
+          });
+        }
 
         await page.waitForTimeout(2500);
 
