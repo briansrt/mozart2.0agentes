@@ -961,6 +961,8 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
       console.log("✅ Perfil renovado con nueva sesión");
     }
 
+        await page.waitForTimeout(1000);
+
         // Continuar con el flujo normal
         await page.goto("https://api-test.qrystalos.com/#/ce", {
           waitUntil: "networkidle"
@@ -973,6 +975,8 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
         });
 
         console.log("✅ Entró a Agenda correctamente");
+        
+        await page.waitForTimeout(2000);
 
         // 1️⃣ Click al botón de acción (recargar)
         await page.waitForSelector('.accion-btn', { timeout: 10000 });
