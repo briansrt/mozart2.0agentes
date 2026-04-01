@@ -912,7 +912,7 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
 
     manejarModalActualizacion(page);
 
-    await page.goto("https://api-test.qrystalos.com/#/ce", { waitUntil: "networkidle" });
+    await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", { waitUntil: "networkidle" });
 
     const sesionExpirada = await detectarSesionExpiradaCristal(page);
 
@@ -939,13 +939,13 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
       manejarModalActualizacion(page);
 
       // Login
-      await page.goto("https://api-test.qrystalos.com/#/autenticarse");
+      await page.goto("https://clinicaesperanza.qrystalos.com/#/autenticarse");
 
       const selectorInput = 'input[aria-label="Organización *"]';
       await page.click(selectorInput);
-      await page.fill(selectorInput, 'Pruebas Clinica esperanza');
-      await page.waitForSelector('div.q-item span:has-text("Pruebas Clinica esperanza")');
-      await page.click('div.q-item span:has-text("Pruebas Clinica esperanza")');
+      await page.fill(selectorInput, 'Clinica + Esperanza');
+      await page.waitForSelector('div.q-item span:has-text("Clinica + Esperanza")');
+      await page.click('div.q-item span:has-text("Clinica + Esperanza")');
 
       const usuarioInput = page.locator('input[aria-label="Usuario *"]').first();
       await usuarioInput.waitFor({ state: 'attached' });
@@ -964,13 +964,13 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
         await page.waitForTimeout(1000);
 
         // Continuar con el flujo normal
-        await page.goto("https://api-test.qrystalos.com/#/ce", {
+        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", {
           waitUntil: "networkidle"
         });
 
         await page.waitForTimeout(1500);
 
-        await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
+        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce/agendamiento", {
           waitUntil: "networkidle"
         });
 
@@ -1343,7 +1343,7 @@ export const ReAgendarCitaGuajiraCristal = async (req, res) => {
 
     manejarModalActualizacion(page);
 
-    await page.goto("https://api-test.qrystalos.com/#/ce", { waitUntil: "networkidle" });
+    await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", { waitUntil: "networkidle" });
 
     const sesionExpirada = await detectarSesionExpiradaCristal(page);
 
@@ -1370,13 +1370,13 @@ export const ReAgendarCitaGuajiraCristal = async (req, res) => {
       manejarModalActualizacion(page);
 
       // Login
-      await page.goto("https://api-test.qrystalos.com/#/autenticarse");
+      await page.goto("https://clinicaesperanza.qrystalos.com/#/autenticarse");
 
       const selectorInput = 'input[aria-label="Organización *"]';
       await page.click(selectorInput);
-      await page.fill(selectorInput, 'Pruebas Clinica esperanza');
-      await page.waitForSelector('div.q-item span:has-text("Pruebas Clinica esperanza")');
-      await page.click('div.q-item span:has-text("Pruebas Clinica esperanza")');
+      await page.fill(selectorInput, 'Clinica + Esperanza');
+      await page.waitForSelector('div.q-item span:has-text("Clinica + Esperanza")');
+      await page.click('div.q-item span:has-text("Clinica + Esperanza")');
 
       const usuarioInput = page.locator('input[aria-label="Usuario *"]').first();
       await usuarioInput.waitFor({ state: 'attached' });
@@ -1393,13 +1393,13 @@ export const ReAgendarCitaGuajiraCristal = async (req, res) => {
     }
 
         // Continuar con el flujo normal
-        await page.goto("https://api-test.qrystalos.com/#/ce", {
+        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", {
           waitUntil: "networkidle"
         });
 
         await page.waitForTimeout(3000);
 
-        await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
+        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce/agendamiento", {
           waitUntil: "networkidle"
         });
 
@@ -1576,7 +1576,7 @@ export const CancelarCitaGuajiraCristal = async (req, res) => {
 
     manejarModalActualizacion(page);
 
-    await page.goto("https://api-test.qrystalos.com/#/ce", { waitUntil: "networkidle" });
+    await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", { waitUntil: "networkidle" });
 
     const sesionExpirada = await detectarSesionExpiradaCristal(page);
 
@@ -1603,13 +1603,13 @@ export const CancelarCitaGuajiraCristal = async (req, res) => {
       manejarModalActualizacion(page);
 
       // Login
-      await page.goto("https://api-test.qrystalos.com/#/autenticarse");
+      await page.goto("https://clinicaesperanza.qrystalos.com/#/autenticarse");
 
       const selectorInput = 'input[aria-label="Organización *"]';
       await page.click(selectorInput);
-      await page.fill(selectorInput, 'Pruebas Clinica esperanza');
-      await page.waitForSelector('div.q-item span:has-text("Pruebas Clinica esperanza")');
-      await page.click('div.q-item span:has-text("Pruebas Clinica esperanza")');
+      await page.fill(selectorInput, 'Clinica + Esperanza');
+      await page.waitForSelector('div.q-item span:has-text("Clinica + Esperanza")');
+      await page.click('div.q-item span:has-text("Clinica + Esperanza")');
 
       const usuarioInput = page.locator('input[aria-label="Usuario *"]').first();
       await usuarioInput.waitFor({ state: 'attached' });
@@ -1626,13 +1626,13 @@ export const CancelarCitaGuajiraCristal = async (req, res) => {
     }
 
         // Continuar con el flujo normal
-        await page.goto("https://api-test.qrystalos.com/#/ce", {
+        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", {
           waitUntil: "networkidle"
         });
 
         await page.waitForTimeout(3000);
 
-        await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
+        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce/agendamiento", {
           waitUntil: "networkidle"
         });
 
@@ -1739,6 +1739,369 @@ export const CancelarCitaGuajiraCristal = async (req, res) => {
         if (!res.headersSent) {
           res.status(500).json({
             mensaje: "Error al agendar la cita",
+            error: error.message,
+          });
+        }
+  }finally {
+    procesando = false;
+    try {
+      if (browser) await browser.close();
+      if (session) await client.sessions.stop(session.id);
+      console.log("✅ Sesión cerrada correctamente");
+    } catch (e) {
+      console.error("⚠️ Error al cerrar sesión:", e.message);
+    }
+  }
+
+}
+
+export const VerificarAsistenciaCitaCristal = async (req, res) => {
+  const {fecha, tenant} = req.body
+
+  const [fechaCita] =
+  [fecha].map(f => f.split('/').reverse().join('-'));
+  
+  const usuario = process.env.USUARIOGUAJIRA
+  const clave = process.env.CLAVEGUAJIRA
+  const profileId = process.env.profileIdGuajira
+
+  let session = null;
+  let browser = null;
+  let procesando = true;
+
+  try {
+    // Intentar con el perfil existente
+    session = await client.sessions.create({ 
+      acceptCookies: true,
+      profile: {
+        id: profileId,
+        persistChanges: true,
+      }
+    });
+
+    browser = await chromium.connectOverCDP(session.wsEndpoint);
+    let context = browser.contexts()[0];
+    let page = context.pages()[0];
+
+    const manejarModalActualizacion = (paginaActual) => {
+      (async () => {
+        while (procesando) {
+          try {
+            const btnPostergar = paginaActual.locator('.q-dialog button span.block', {
+              hasText: 'Postergar'
+            }).first();
+            if (await btnPostergar.count() > 0) {
+              console.log("🔔 Modal de actualización detectado - Postergando...");
+              await btnPostergar.click();
+            }
+          } catch (e) {}
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      })();
+    };
+
+    manejarModalActualizacion(page);
+
+    await page.goto("https://clinicaesperanza.qrystalos.com/#/autenticarse");
+
+    const selectorInput = 'input[aria-label="Organización *"]';
+    await page.click(selectorInput);
+    await page.fill(selectorInput, 'Clinica + Esperanza');
+    await page.click('div.q-item span:has-text("Clinica + Esperanza")');
+
+    await page.locator('input[aria-label="Usuario *"]').fill(usuario);
+    await page.locator('input[aria-label="Clave Secreta *"]').fill(clave);
+
+    await page.click('button:has-text("Continuar")');
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(1500);
+
+    await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", { waitUntil: "networkidle" });
+
+        // Continuar con el flujo normal
+        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", {
+          waitUntil: "networkidle"
+        });
+
+        await page.waitForTimeout(3000);
+
+        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce/agendamiento", {
+          waitUntil: "networkidle"
+        });
+
+        console.log("✅ Entró a Agenda correctamente");
+
+        const fechaInput = page.locator('input[aria-label="Fecha"]');
+        await fechaInput.fill(fechaCita);
+
+        const especialidad = page.locator('input[aria-label="Seleccione una especialidad"]');
+        await especialidad.click();
+        await especialidad.fill('PERINATOLOGÍA');
+
+        // esperar opción
+        const opcion = page.locator('.q-menu .q-item', {
+          hasText: 'PERINATOLOGÍA O MEDICINA FETAL'
+        }).first();
+
+        await opcion.waitFor();
+        await opcion.click();
+
+        await page.waitForTimeout(1500);
+        await page.getByRole('button', { name: 'Cumplida' }).click();
+        await page.waitForTimeout(1000);
+
+        // Seleccionar todas las filas que tengan "Cumplida"
+        const citasCumplidas = page.locator('td.q-td.cursor-pointer', {
+          hasText: 'Cumplida'
+        });
+
+        const totalCitas = await citasCumplidas.count();
+        console.log(`Total citas cumplidas encontradas: ${totalCitas}`);
+
+        const cedulas = [];
+
+        for (let i = 0; i < totalCitas; i++) {
+          const citas = page.locator('td.q-td.cursor-pointer', { hasText: 'Cumplida' });
+          
+          await citas.nth(i).click();
+          await page.waitForTimeout(1500);
+
+          // Esperar que aparezca la barra de detalle
+          const detailBar = page.locator('.cit-detail-bar');
+          await detailBar.waitFor({ state: 'visible', timeout: 5000 });
+          await page.waitForTimeout(1000);
+
+          // Extraer la cédula — soporta CC, TI, CE, PA, RC, etc.
+          const cedulaEl = page.locator('.q-item__label.text-link').first();
+          await cedulaEl.waitFor({ timeout: 5000 });
+          const textoCedula = (await cedulaEl.innerText()).trim();
+          const tipoCedula = textoCedula.split(' ')[0];
+          const numeroCedula = textoCedula.replace(/^[A-Z]+\s*/, '').trim();
+          const celdaCita = citas.nth(i);
+          const textoEPS = await celdaCita.locator('small b').nth(0).innerText();
+          const textoPlan = await celdaCita.locator('small b').nth(1).innerText();
+
+          const fechaEl = page.locator('.q-item__label.cit-detail-value.text-bold.text-negative').first();
+          await fechaEl.waitFor({ timeout: 5000 });
+          const textoFecha = (await fechaEl.innerText()).trim();
+          const fechaCita = textoFecha.split(' - ')[0].trim();
+          const solofecha = fechaCita.split(' ')[0];
+
+          cedulas.push({ 
+            tipo: tipoCedula, 
+            numero: numeroCedula,
+            eps: textoEPS.trim(),
+            plan: textoPlan.trim(),
+            fechaCita: solofecha
+          });
+
+
+          // Cerrar usando el botón con ícono "close" dentro de la barra de detalle
+          const btnCerrar = detailBar.locator('button:has(i.material-icons:text("close"))');
+          await btnCerrar.waitFor({ state: 'visible', timeout: 5000 });
+          await btnCerrar.click();
+
+          // Esperar que la barra se cierre
+          await detailBar.waitFor({ state: 'hidden', timeout: 5000 });
+          await page.waitForTimeout(1000);
+        }
+
+        console.log('Cédulas extraídas:', cedulas);
+
+        procesando = false;
+
+        const contextGlobal = browser.contexts()[0];
+        const pageMozartia = await contextGlobal.newPage();
+
+          await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}/login`, {
+            waitUntil: "networkidle",
+          });
+
+          // elegir email según tenant
+          const emailMozart =
+            tenant === "cemdiprueba"
+              ? process.env.mozartEmailCemdiPrueba
+              : process.env.mozartEmail;
+
+          await pageMozartia
+            .locator('input[name="email"]')
+            .fill(emailMozart);
+          await pageMozartia
+            .locator('input[name="password"]')
+            .fill(process.env.mozartPassword);
+          await pageMozartia
+            .getByRole("button", { name: /Acceder al Sistema/i })
+            .click();
+
+          await pageMozartia.waitForFunction(
+            (tenant) => {
+              return (
+                location.pathname.startsWith(`/${tenant}`) ||
+                location.pathname.startsWith("/patients")
+              );
+            },
+            tenant,
+            { timeout: 60000 },
+          );
+
+          await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
+
+          await pageMozartia.goto(
+            `https://new.app.mozartia.com/${tenant}/patients`,
+            { waitUntil: "networkidle" },
+          );
+
+          function obtenerNombreTab(eps, plan) {
+            const texto = (eps + ' ' + plan).toLowerCase();
+            if (texto.includes('particular')) return 'Particular';
+            if (texto.includes('sanitas') && !texto.includes('colsanitas')) return 'Sanitas';
+            if (texto.includes('colsanitas')) return 'Colsanitas';
+            if (texto.includes('nueva eps') || texto.includes('nueva-eps')) return 'Nueva Eps';
+            if (texto.includes('fideicomisos')) return 'Fideicomisos S.A';
+            if (texto.includes('coomeva')) return 'Coomeva';
+            return null; // Si no coincide, buscar sin filtrar plan
+          }
+
+          for (const paciente of cedulas) {
+            console.log(`\nProcesando: ${paciente.tipo} ${paciente.numero} - ${paciente.eps} - Fecha: ${paciente.fechaCita}`);
+
+            try {
+              await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}/patients`, {
+                waitUntil: "networkidle",
+              });
+              await pageMozartia.waitForTimeout(1500);
+
+              // Función helper para buscar por cédula
+              const buscarPaciente = async () => {
+                const input = pageMozartia.locator('input[placeholder*="Nombre, email, teléfono..."]');
+                await input.waitFor({ state: 'visible', timeout: 5000 });
+                await input.clear();
+                await input.fill(paciente.numero);
+                await pageMozartia.waitForTimeout(500);
+                await pageMozartia.locator('button[title="Buscar pacientes"]').click();
+                await pageMozartia.waitForLoadState('networkidle');
+                await pageMozartia.waitForTimeout(2000);
+
+                const filas = await pageMozartia.locator('tbody tr').count();
+                console.log(`  🔍 Filas encontradas: ${filas}`);
+                return filas;
+              };
+
+              // Seleccionar tab del plan
+              const nombreTab = obtenerNombreTab(paciente.eps, paciente.plan);
+              if (nombreTab) {
+                const tabBtn = pageMozartia.locator(`nav button`, { hasText: nombreTab }).first();
+                const tabVisible = await tabBtn.isVisible();
+                if (tabVisible) {
+                  await tabBtn.click();
+                } else {
+                  await pageMozartia.locator('select').selectOption({ label: nombreTab });
+                }
+                await pageMozartia.waitForTimeout(1000);
+                console.log(`  Tab EPS seleccionado: ${nombreTab}`);
+              }
+
+              // Seleccionar sub-tab de plan (Perinatología, Mamografías, etc.)
+              await pageMozartia.waitForTimeout(800);
+              const subTabPerinat = pageMozartia.locator('nav button', { hasText: /Perinatolog/i }).first();
+              const haySubTab = await subTabPerinat.isVisible();
+              if (haySubTab) {
+                await subTabPerinat.click();
+                await pageMozartia.waitForTimeout(800);
+                console.log(`  Sub-tab seleccionado: Plan Perinatología`);
+              } else {
+                // Intentar con select mobile
+                const selectSubTab = pageMozartia.locator('select option', { hasText: /Perinatolog/i });
+                const haySelectSubTab = await selectSubTab.count() > 0;
+                if (haySelectSubTab) {
+                  await pageMozartia.locator('select').last().selectOption({ label: /Perinatolog/i });
+                  await pageMozartia.waitForTimeout(800);
+                  console.log(`  Sub-tab (select) seleccionado: Plan Perinatología`);
+                }
+              }
+
+              // Primera búsqueda en el tab del plan
+              let filas = await buscarPaciente();
+
+              // Fallback: si no hay resultados, buscar en tab Pacientes
+              if (filas === 0) {
+                console.warn(`  ⚠️ No encontrado en tab ${nombreTab}, buscando sin filtro...`);
+                await pageMozartia.locator(`nav button`, { hasText: 'Pacientes' }).first().click();
+                await pageMozartia.waitForTimeout(1000);
+                filas = await buscarPaciente();
+              }
+
+              if (filas === 0) {
+                console.warn(`  ⚠️ Paciente ${paciente.numero} no encontrado en ningún tab`);
+                continue;
+              }
+
+              // Click en agenda del primer resultado
+              const btnAgenda = pageMozartia.locator('button[title="Ver agenda del paciente"]').first();
+              await btnAgenda.waitFor({ state: 'visible', timeout: 8000 });
+              await btnAgenda.click();
+              await pageMozartia.waitForTimeout(1500);
+
+              // Ir a pestaña Agendadas
+              const tabAgendadas = pageMozartia.locator('button', { hasText: /Agendadas/i }).first();
+              await tabAgendadas.waitFor({ state: 'visible', timeout: 5000 });
+              await tabAgendadas.click();
+              await pageMozartia.waitForTimeout(1000);
+
+              // Verificar si hay citas agendadas
+              const sinCitas = pageMozartia.locator('h3', { hasText: 'No hay citas agendadas' });
+              const estaVacio = await sinCitas.isVisible();
+
+              if (estaVacio) {
+                console.warn(`  ⚠️ Sin citas agendadas para ${paciente.tipo} ${paciente.numero}`);
+                continue;
+              }
+
+              // Buscar la cita que coincida con la fecha extraída
+              const todasLasCitas = pageMozartia.locator('.border.border-gray-200.rounded-xl');
+              const totalCitasMozart = await todasLasCitas.count();
+              console.log(`  📅 Buscando cita del ${paciente.fechaCita} entre ${totalCitasMozart} cita(s)`);
+
+              let encontrada = false;
+              for (let j = 0; j < totalCitasMozart; j++) {
+                const citaMozart = todasLasCitas.nth(j);
+                const textoCita = await citaMozart.innerText();
+
+                if (textoCita.includes(paciente.fechaCita)) {
+                  const btnCompletar = citaMozart.locator('button[title="Marcar como completada"]');
+                  await btnCompletar.waitFor({ state: 'visible', timeout: 5000 });
+                  await btnCompletar.click();
+                  await pageMozartia.waitForTimeout(1000);
+                  const btnConfirmar = pageMozartia.locator('button', { hasText: 'Marcar como Completada' }).last();
+
+                  await btnConfirmar.waitFor({ state: 'visible', timeout: 5000 });
+                  await btnConfirmar.click();
+                  await page.waitForTimeout(1000);
+                  encontrada = true;
+                  console.log(`  ✅ Completada cita del ${paciente.fechaCita}: ${paciente.tipo} ${paciente.numero}`);
+                  break;
+                }
+              }
+
+              if (!encontrada) {
+                console.warn(`  ⚠️ No se encontró cita del ${paciente.fechaCita} para ${paciente.numero}`);
+              }
+
+            } catch (err) {
+              console.error(`  ❌ Error con ${paciente.tipo} ${paciente.numero}:`, err.message);
+            }
+          }
+
+          console.log('\n=== Proceso finalizado ===');
+          console.log(`Total procesados: ${cedulas.length}`);
+
+
+
+      } catch (error) {
+        console.error("❌ Error:", error.message);
+        if (!res.headersSent) {
+          res.status(500).json({
+            mensaje: "Error al consultar el estado de la cita",
             error: error.message,
           });
         }
