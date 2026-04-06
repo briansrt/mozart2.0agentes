@@ -912,7 +912,7 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
 
     manejarModalActualizacion(page);
 
-    await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", { waitUntil: "networkidle" });
+    await page.goto("https://api-test.qrystalos.com/#/ce", { waitUntil: "networkidle" });
 
     const sesionExpirada = await detectarSesionExpiradaCristal(page);
 
@@ -939,13 +939,13 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
       manejarModalActualizacion(page);
 
       // Login
-      await page.goto("https://clinicaesperanza.qrystalos.com/#/autenticarse");
+      await page.goto("https://api-test.qrystalos.com/#/autenticarse");
 
       const selectorInput = 'input[aria-label="Organización *"]';
       await page.click(selectorInput);
-      await page.fill(selectorInput, 'Clinica + Esperanza');
-      await page.waitForSelector('div.q-item span:has-text("Clinica + Esperanza")');
-      await page.click('div.q-item span:has-text("Clinica + Esperanza")');
+      await page.fill(selectorInput, 'Pruebas Clinica esperanza');
+      await page.waitForSelector('div.q-item span:has-text("Pruebas Clinica esperanza")');
+      await page.click('div.q-item span:has-text("Pruebas Clinica esperanza")');
 
       const usuarioInput = page.locator('input[aria-label="Usuario *"]').first();
       await usuarioInput.waitFor({ state: 'attached' });
@@ -964,13 +964,13 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
         await page.waitForTimeout(1000);
 
         // Continuar con el flujo normal
-        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", {
+        await page.goto("https://api-test.qrystalos.com/#/ce", {
           waitUntil: "networkidle"
         });
 
         await page.waitForTimeout(1500);
 
-        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce/agendamiento", {
+        await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
           waitUntil: "networkidle"
         });
 
@@ -1343,7 +1343,7 @@ export const ReAgendarCitaGuajiraCristal = async (req, res) => {
 
     manejarModalActualizacion(page);
 
-    await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", { waitUntil: "networkidle" });
+    await page.goto("https://api-test.qrystalos.com/#/ce", { waitUntil: "networkidle" });
 
     const sesionExpirada = await detectarSesionExpiradaCristal(page);
 
@@ -1370,13 +1370,13 @@ export const ReAgendarCitaGuajiraCristal = async (req, res) => {
       manejarModalActualizacion(page);
 
       // Login
-      await page.goto("https://clinicaesperanza.qrystalos.com/#/autenticarse");
+      await page.goto("https://api-test.qrystalos.com/#/autenticarse");
 
       const selectorInput = 'input[aria-label="Organización *"]';
       await page.click(selectorInput);
-      await page.fill(selectorInput, 'Clinica + Esperanza');
-      await page.waitForSelector('div.q-item span:has-text("Clinica + Esperanza")');
-      await page.click('div.q-item span:has-text("Clinica + Esperanza")');
+      await page.fill(selectorInput, 'Pruebas Clinica esperanza');
+      await page.waitForSelector('div.q-item span:has-text("Pruebas Clinica esperanza")');
+      await page.click('div.q-item span:has-text("Pruebas Clinica esperanza")');
 
       const usuarioInput = page.locator('input[aria-label="Usuario *"]').first();
       await usuarioInput.waitFor({ state: 'attached' });
@@ -1393,13 +1393,13 @@ export const ReAgendarCitaGuajiraCristal = async (req, res) => {
     }
 
         // Continuar con el flujo normal
-        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", {
+        await page.goto("https://api-test.qrystalos.com/#/ce", {
           waitUntil: "networkidle"
         });
 
         await page.waitForTimeout(3000);
 
-        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce/agendamiento", {
+        await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
           waitUntil: "networkidle"
         });
 
@@ -1576,7 +1576,7 @@ export const CancelarCitaGuajiraCristal = async (req, res) => {
 
     manejarModalActualizacion(page);
 
-    await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", { waitUntil: "networkidle" });
+    await page.goto("https://api-test.qrystalos.com/#/ce", { waitUntil: "networkidle" });
 
     const sesionExpirada = await detectarSesionExpiradaCristal(page);
 
@@ -1603,13 +1603,13 @@ export const CancelarCitaGuajiraCristal = async (req, res) => {
       manejarModalActualizacion(page);
 
       // Login
-      await page.goto("https://clinicaesperanza.qrystalos.com/#/autenticarse");
+      await page.goto("https://api-test.qrystalos.com/#/autenticarse");
 
       const selectorInput = 'input[aria-label="Organización *"]';
       await page.click(selectorInput);
-      await page.fill(selectorInput, 'Clinica + Esperanza');
-      await page.waitForSelector('div.q-item span:has-text("Clinica + Esperanza")');
-      await page.click('div.q-item span:has-text("Clinica + Esperanza")');
+      await page.fill(selectorInput, 'Pruebas Clinica esperanza');
+      await page.waitForSelector('div.q-item span:has-text("Pruebas Clinica esperanza")');
+      await page.click('div.q-item span:has-text("Pruebas Clinica esperanza")');
 
       const usuarioInput = page.locator('input[aria-label="Usuario *"]').first();
       await usuarioInput.waitFor({ state: 'attached' });
@@ -1626,13 +1626,13 @@ export const CancelarCitaGuajiraCristal = async (req, res) => {
     }
 
         // Continuar con el flujo normal
-        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", {
+        await page.goto("https://api-test.qrystalos.com/#/ce", {
           waitUntil: "networkidle"
         });
 
         await page.waitForTimeout(3000);
 
-        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce/agendamiento", {
+        await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
           waitUntil: "networkidle"
         });
 
@@ -1802,12 +1802,12 @@ export const VerificarAsistenciaCitaCristal = async (req, res) => {
 
     manejarModalActualizacion(page);
 
-    await page.goto("https://clinicaesperanza.qrystalos.com/#/autenticarse");
+    await page.goto("https://api-test.qrystalos.com/#/autenticarse");
 
     const selectorInput = 'input[aria-label="Organización *"]';
     await page.click(selectorInput);
-    await page.fill(selectorInput, 'Clinica + Esperanza');
-    await page.click('div.q-item span:has-text("Clinica + Esperanza")');
+    await page.fill(selectorInput, 'Pruebas Clinica esperanza');
+    await page.click('div.q-item span:has-text("Pruebas Clinica esperanza")');
 
     await page.locator('input[aria-label="Usuario *"]').fill(usuario);
     await page.locator('input[aria-label="Clave Secreta *"]').fill(clave);
@@ -1816,16 +1816,16 @@ export const VerificarAsistenciaCitaCristal = async (req, res) => {
     await page.waitForLoadState("networkidle");
     await page.waitForTimeout(1500);
 
-    await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", { waitUntil: "networkidle" });
+    await page.goto("https://api-test.qrystalos.com/#/ce", { waitUntil: "networkidle" });
 
         // Continuar con el flujo normal
-        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce", {
+        await page.goto("https://api-test.qrystalos.com/#/ce", {
           waitUntil: "networkidle"
         });
 
         await page.waitForTimeout(3000);
 
-        await page.goto("https://clinicaesperanza.qrystalos.com/#/ce/agendamiento", {
+        await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
           waitUntil: "networkidle"
         });
 
