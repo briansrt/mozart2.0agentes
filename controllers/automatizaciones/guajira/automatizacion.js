@@ -744,10 +744,10 @@ export const ConsultarAutorizacion = async (req, res) => {
 
 async function seleccionarCita(page, fecha, hora) {
   const fechaHora = `${fecha} ${hora}`;
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(2000);
 
   while (true) {
-    await page.waitForSelector('.q-table tbody tr.q-tr', { timeout: 5000 });
+    await page.waitForSelector('.q-table tbody tr.q-tr', { timeout: 2000 });
 
     // Buscar la celda de fecha que contenga el texto exacto
     const celdaFecha = page.locator('.q-table tbody tr.q-tr td', {
@@ -774,7 +774,7 @@ async function seleccionarCita(page, fecha, hora) {
 
     console.log("➡️ Pasando a la siguiente página");
     await botonSiguiente.click();
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(1000);
   }
 }
 
@@ -868,8 +868,28 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
     doctorId, tipo, tenant, pacienteId, especialidad, autorizacionId, sedeId, citaId
   } = req.body;
 
-  const [fechaCitaFormateada, fechaAutorizacionFormateada, fechaVencimientoFormateada] =
-  [fechaCita, fechaAutorizacion, fechaVencimiento].map(f => f.split('/').reverse().join('-'));
+  const formatearFecha = (f) => {
+    if (!f) return f;
+
+    const separador = f.includes('/') ? '/' : '-';
+    const partes = f.split(separador);
+
+    if (partes.length !== 3) {
+      throw new Error(`Formato de fecha inválido: ${f}`);
+    }
+
+    // Si ya está en formato YYYY-MM-DD
+    if (partes[0].length === 4) return f;
+
+    const [dia, mes, anio] = partes;
+    return `${anio}-${mes}-${dia}`;
+  };
+
+  const [
+    fechaCitaFormateada,
+    fechaAutorizacionFormateada,
+    fechaVencimientoFormateada
+  ] = [fechaCita, fechaAutorizacion, fechaVencimiento].map(formatearFecha);
 
   const usuario = process.env.USUARIOGUAJIRA
   const clave = process.env.CLAVEGUAJIRA
@@ -1300,8 +1320,24 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
 export const ReAgendarCitaGuajiraCristal = async (req, res) => {
   const { fechaAntigua, horaAntigua, nuevaFecha, nuevaHora, observacion, especialidad, pacienteId, tenant, tipo, doctorId, citaIdOriginal } = req.body
 
+  const formatearFecha = (f) => {
+    if (!f) return f;
+
+    // Detecta separador automáticamente
+    const separador = f.includes('/') ? '/' : '-';
+
+    const partes = f.split(separador);
+
+    // Si ya viene en formato YYYY-MM-DD no tocar
+    if (partes[0].length === 4) return f;
+
+    const [dia, mes, anio] = partes;
+    return `${anio}-${mes}-${dia}`;
+  };
+
   const [fechaAntiguaInput, nuevaFechaFormateada] =
-  [fechaAntigua, nuevaFecha].map(f => f.split('/').reverse().join('-'));
+    [fechaAntigua, nuevaFecha].map(formatearFecha);
+
   const usuario = process.env.USUARIOGUAJIRA
   const clave = process.env.CLAVEGUAJIRA
   const profileId = process.env.profileIdGuajira
@@ -1404,6 +1440,8 @@ export const ReAgendarCitaGuajiraCristal = async (req, res) => {
         });
 
         console.log("✅ Entró a Agenda correctamente");
+
+        await page.waitForTimeout(1500);
 
         const fechaInput = page.locator('input[aria-label="Fecha"]');
         await fechaInput.fill(fechaAntiguaInput);
@@ -1514,7 +1552,7 @@ export const ReAgendarCitaGuajiraCristal = async (req, res) => {
         console.error("❌ Error:", error.message);
         if (!res.headersSent) {
           res.status(500).json({
-            mensaje: "Error al agendar la cita",
+            mensaje: "Error al reagendar la cita",
             error: error.message,
           });
         }
@@ -1533,8 +1571,23 @@ export const ReAgendarCitaGuajiraCristal = async (req, res) => {
 export const CancelarCitaGuajiraCristal = async (req, res) => {
   const { fecha, hora, observacion, citaId, tenant } = req.body
 
-  const [fechaCancelar ] =
-  [fecha].map(f => f.split('/').reverse().join('-'));
+  const fechaCancelar = (() => {
+    if (!fecha) return fecha;
+
+    const separador = fecha.includes('/') ? '/' : '-';
+    const partes = fecha.split(separador);
+
+    if (partes.length !== 3) {
+      throw new Error(`Formato de fecha inválido: ${fecha}`);
+    }
+
+    // Si ya está en formato YYYY-MM-DD
+    if (partes[0].length === 4) return fecha;
+
+    const [dia, mes, anio] = partes;
+    return `${anio}-${mes}-${dia}`;
+  })();
+
   const usuario = process.env.USUARIOGUAJIRA
   const clave = process.env.CLAVEGUAJIRA
   const profileId = process.env.profileIdGuajira
