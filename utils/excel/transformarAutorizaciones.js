@@ -23,24 +23,29 @@ function normalizarFecha(fecha) {
 
 export const transformarAutorizaciones = (data) => {
   
-  return data.map((row, i) => {
-    const fechaRaw = row["FECHA EMISIÓN"];
-    const fechaNormalizada = normalizarFecha(fechaRaw);
+  return data
+    .filter((row) => {
+      const estado = row["ESTADO AUTORIZACIÓN"]?.toString().trim().toUpperCase();
+      return estado !== "AUTORIZACION ANULADA";
+    })
+    .map((row, i) => {
+      const fechaRaw = row["FECHA EMISIÓN"];
+      const fechaNormalizada = normalizarFecha(fechaRaw);
 
-    const cedula = row["TIPO ID AFILIADO"]?.toString().split(" ")[1] || "";
-    const servicio = `${row["CÓDIGO SERVICIO"] || ""} - ${row["DESCRIPCIÓN"] || ""}`;
+      const cedula = row["TIPO ID AFILIADO"]?.toString().split(" ")[1] || "";
+      const servicio = `${row["CÓDIGO SERVICIO"] || ""} - ${row["DESCRIPCIÓN"] || ""}`;
 
-    return {
-      "Cédula *": cedula,
-      "Nombres *": row["NOMBRE AFILIADO"] || "",
-      "Fecha de Expedición *": fechaNormalizada,
-      "Servicio *": servicio,
-      "Número de Autorización": row["NÚMERO AUTORIZACIÓN"] || "",
-      "Número de Radicación *": row["NÚMERO RADICACIÓN"] || "",
-      "Observaciones": row["OBSERVACIONES"] || "",
-      "Agendada": false
-    };
-  });
+      return {
+        "Cédula *": cedula,
+        "Nombres *": row["NOMBRE AFILIADO"] || "",
+        "Fecha de Expedición *": fechaNormalizada,
+        "Servicio *": servicio,
+        "Número de Autorización": row["NÚMERO AUTORIZACIÓN"] || "",
+        "Número de Radicación *": row["NÚMERO RADICACIÓN"] || "",
+        "Observaciones": row["OBSERVACIONES"] || "",
+        "Agendada": false
+      };
+    });
 };
 
 
