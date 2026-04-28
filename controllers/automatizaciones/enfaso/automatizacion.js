@@ -712,6 +712,11 @@ export const AutorizacionEnfaso = async (req, res) => {
           await page.locator("#formaVDGeneral\\:btnConsultarUsuario").click();
           await page.waitForTimeout(3000);
 
+          await page.fill("#formaVDGeneral\\:nroSolicitud", numAutorizacion);
+
+          await page.locator("#formaVDGeneral\\:btnConsultarUsuario").click();
+          await page.waitForTimeout(3000);
+
           // ✅ Verificar si el usuario no fue encontrado
           const usuarioNoEncontrado = await page.locator(
             "#formaVDGeneral\\:messagesError .rich-messages-label"
@@ -728,11 +733,6 @@ export const AutorizacionEnfaso = async (req, res) => {
               motivo: "Usuario no encontrado en el sistema",
             });
           }
-
-          await page.fill("#formaVDGeneral\\:nroSolicitud", numAutorizacion);
-
-          await page.locator("#formaVDGeneral\\:btnConsultarUsuario").click();
-          await page.waitForTimeout(3000);
 
           // ── 1. Datos del usuario ──────────────────────────────────────────────────
           await page.waitForSelector("#info-usuario", { timeout: 30000 });
