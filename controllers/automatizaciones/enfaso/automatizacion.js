@@ -211,7 +211,7 @@ export const AutorizacionEnfaso = async (req, res) => {
   const usuario= process.env.USUARIOENFASO
   const clave= process.env.CLAVEENFASO
   const profileId = process.env.PROFILEIDENFASO
-  
+
   let session = null;
   let browser = null;
 
@@ -309,6 +309,26 @@ export const AutorizacionEnfaso = async (req, res) => {
 
           await page.locator("#formaVDGeneral\\:j_id77").click();
           await page.waitForTimeout(3000);
+
+          await page.locator("#formaVDGeneral\\:j_id77").click();
+          await page.waitForTimeout(3000);
+
+          // ✅ Verificar si el usuario no fue encontrado
+          const usuarioNoEncontrado = await page.locator(
+            "#formaVDGeneral\\:messagesError .rich-messages-label"
+          ).isVisible().catch(() => false);
+
+          if (usuarioNoEncontrado) {
+            const mensajeError = await page.locator(
+              "#formaVDGeneral\\:messagesError .rich-messages-label"
+            ).innerText().catch(() => "El usuario no fue encontrado.");
+
+            return res.status(404).json({
+              mensaje: mensajeError.trim(),
+              puedeAgendar: false,
+              motivo: "Usuario no encontrado en el sistema",
+            });
+          }
 
           // 1️⃣ Seleccionar "Todas" en Compañía
           await page
@@ -688,6 +708,26 @@ export const AutorizacionEnfaso = async (req, res) => {
           await radioAut.click();
 
           await page.waitForTimeout(2000);
+
+          await page.locator("#formaVDGeneral\\:btnConsultarUsuario").click();
+          await page.waitForTimeout(3000);
+
+          // ✅ Verificar si el usuario no fue encontrado
+          const usuarioNoEncontrado = await page.locator(
+            "#formaVDGeneral\\:messagesError .rich-messages-label"
+          ).isVisible().catch(() => false);
+
+          if (usuarioNoEncontrado) {
+            const mensajeError = await page.locator(
+              "#formaVDGeneral\\:messagesError .rich-messages-label"
+            ).innerText().catch(() => "El usuario no fue encontrado.");
+
+            return res.status(404).json({
+              mensaje: mensajeError.trim(),
+              puedeAgendar: false,
+              motivo: "Usuario no encontrado en el sistema",
+            });
+          }
 
           await page.fill("#formaVDGeneral\\:nroSolicitud", numAutorizacion);
 
