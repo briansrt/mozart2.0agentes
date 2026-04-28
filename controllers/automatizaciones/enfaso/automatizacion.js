@@ -206,8 +206,12 @@ export const detectarSesionExpiradaEnfaso = async (page) => {
 };  
 
 export const AutorizacionEnfaso = async (req, res) => {
-  const { usuario, clave, profileId, tipoConsulta, tipoDocumento, documento, numAutorizacion } = req.body;
+  const { tipoConsulta, tipoDocumento, documento, numAutorizacion } = req.body;
 
+  const usuario= process.env.USUARIOENFASO
+  const clave= process.env.CLAVEENFASO
+  const profileId = process.env.PROFILEIDENFASO
+  
   let session = null;
   let browser = null;
 
