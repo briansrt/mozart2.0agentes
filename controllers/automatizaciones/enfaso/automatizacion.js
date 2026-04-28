@@ -709,9 +709,6 @@ export const AutorizacionEnfaso = async (req, res) => {
 
           await page.waitForTimeout(2000);
 
-          await page.locator("#formaVDGeneral\\:btnConsultarUsuario").click();
-          await page.waitForTimeout(3000);
-
           await page.fill("#formaVDGeneral\\:nroSolicitud", numAutorizacion);
 
           await page.locator("#formaVDGeneral\\:btnConsultarUsuario").click();
