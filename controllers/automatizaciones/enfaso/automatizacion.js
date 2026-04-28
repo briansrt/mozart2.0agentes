@@ -3,11 +3,21 @@ import { Hyperbrowser } from "@hyperbrowser/sdk";
 import { chromium } from "playwright-core";
 import moment from "moment-timezone";
 import fetch from "node-fetch";
-import canvas from 'canvas';
-const { DOMMatrix, ImageData } = canvas;
-globalThis.DOMMatrix = DOMMatrix;
-globalThis.ImageData = ImageData;
-globalThis.Path2D = globalThis.Path2D || class Path2D {};
+
+// Polyfills manuales para pdfjs-dist (sin necesitar canvas)
+if (!globalThis.DOMMatrix) {
+  globalThis.DOMMatrix = class DOMMatrix {
+    constructor() { this.a=1;this.b=0;this.c=0;this.d=1;this.e=0;this.f=0; }
+  };
+}
+if (!globalThis.ImageData) {
+  globalThis.ImageData = class ImageData {
+    constructor(w, h) { this.width=w; this.height=h; this.data=new Uint8ClampedArray(w*h*4); }
+  };
+}
+if (!globalThis.Path2D) {
+  globalThis.Path2D = class Path2D {};
+} 
 
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -198,6 +208,9 @@ export const detectarSesionExpiradaEnfaso = async (page) => {
 export const AutorizacionEnfaso = async (req, res) => {
   const { usuario, clave, profileId, tipoConsulta, tipoDocumento, documento, numAutorizacion } = req.body;
 
+  let session = null;
+  let browser = null;
+
   try {
     // Intentar con el perfil existente
     let session = await client.sessions.create({ 
@@ -209,7 +222,7 @@ export const AutorizacionEnfaso = async (req, res) => {
       }
     });
     
-        let browser = await chromium.connectOverCDP(session.wsEndpoint);
+        browser = await chromium.connectOverCDP(session.wsEndpoint);
         let context = browser.contexts()[0];
         let page = context.pages()[0];
 
@@ -857,16 +870,24 @@ export const AutorizacionEnfaso = async (req, res) => {
         });
    
   } catch (error) {
-    console.error("Error al iniciar sesión:", error);
-
+    console.error("Error:", error);
     if (!res.headersSent) {
       res.status(500).json({
         mensaje: "Error al iniciar el proceso",
         error: error.message,
       });
     }
+  } finally {
+    // ✅ Siempre se ejecuta, haya error o no
+    try {
+      await browser.close();
+      await client.sessions.stop(session.id);
+      console.log("🔒 Sesión cerrada correctamente");
+    } catch (e) {
+      console.error("Error al cerrar sesión:", e.message);
+    }
   }
-};
+}
 
 async function detectarSesionExpirada(page) {
   try {
@@ -1087,7 +1108,16 @@ export const AutorizacionColpatria = async (req, res) => {
         console.log("🔹 KeyNumber encontrado:", keyNumber);
 
         const cookies = await context.cookies('https://proveedores.axacolpatria.co');
-        const cookieHeader = cookies.map(c => `${c.name}=${c.value}`).join('; ');
+        const cookieHeader = cookies
+          .filter(c => /^[a-zA-Z0-9_\-\.]+$/.test(c.name))
+          .map(c => `${c.name}=${c.value.replace(/[\r\n\x00-\x1F\x7F]/g, '')}`)
+          .join('; ');
+
+        cookies.forEach(c => {
+          if (/[\r\n\x00-\x1F\x7F]/.test(c.value) || /[\r\n\x00-\x1F\x7F]/.test(c.name)) {
+            console.log('⚠️ Cookie problemática:', c.name, '| valor:', JSON.stringify(c.value));
+          }
+        });
 
         const formData = new URLSearchParams();
         formData.append("_Consultadeautorizacionesdesalud_INSTANCE_e5P7yim3vwg5_keyNumber", keyNumber);
