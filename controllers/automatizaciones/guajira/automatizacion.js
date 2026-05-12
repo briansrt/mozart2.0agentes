@@ -2,9 +2,10 @@ import dotenv from "dotenv";
 import { Hyperbrowser } from "@hyperbrowser/sdk";
 import { chromium } from "playwright-core";
 import { guardarResultadoEnCache, obtenerResultadoDeCache } from '../../../utils/memoryCache.js';
-import { transformarAutorizacionesGuajira } from "../../../utils/excel/transformarAutorizaciones.js";
+import { transformarAutorizacionesGuajira, transformarAutorizacionesEsperanza } from "../../../utils/excel/transformarAutorizaciones.js";
 import { generarExcelBuffer } from "../../../utils/excel/escribirExcel.js";
 import moment from "moment-timezone";
+import { leerExcelDesdeBuffer } from "../../../utils/excel/leerExcel.js";
 
 dotenv.config();
 
@@ -1811,8 +1812,22 @@ export const CancelarCitaGuajiraCristal = async (req, res) => {
 export const VerificarAsistenciaCitaCristal = async (req, res) => {
   const {fecha, tenant} = req.body
 
-  const [fechaCita] =
-  [fecha].map(f => f.split('/').reverse().join('-'));
+  const fechaCita = (() => {
+    if (!fecha) return fecha;
+
+    const separador = fecha.includes('/') ? '/' : '-';
+    const partes = fecha.split(separador);
+
+    if (partes.length !== 3) {
+      throw new Error(`Formato de fecha inválido: ${fecha}`);
+    }
+
+    // Si ya está en formato YYYY-MM-DD
+    if (partes[0].length === 4) return fecha;
+
+    const [dia, mes, anio] = partes;
+    return `${anio}-${mes}-${dia}`;
+  })();
   
   const usuario = process.env.USUARIOGUAJIRA
   const clave = process.env.CLAVEGUAJIRA
@@ -2169,4 +2184,673 @@ export const VerificarAsistenciaCitaCristal = async (req, res) => {
     }
   }
 
+}
+
+export const descargarAutorizacionEsperanza = async (req, res) => {
+  const { tenant } = req.body
+  const archivoExcel = req.file;
+
+  if (!archivoExcel) {
+    return res.status(400).json({
+      mensaje: "No se recibió archivo Excel",
+    });
+  }
+
+
+  try {
+      session = await client.sessions.create({ acceptCookies: true });
+  
+      res.status(200).json({
+        mensaje: "Proceso iniciado",
+        liveUrl: session.liveUrl,
+      });
+  
+      console.log("preview: ", session.liveUrl);
+  
+      (async () => {
+        try {
+          browser = await chromium.connectOverCDP(session.wsEndpoint);
+          const context = browser.contexts()[0];
+          page = context.pages()[0];
+  
+          const bufferExcel = archivoExcel.buffer;
+          const dataOriginal = leerExcelDesdeBuffer(bufferExcel);
+
+          
+  
+          // ===== Procesar Excel =====
+          
+          const dataTransformada = transformarAutorizacionesEsperanza(dataOriginal);
+          const bufferTransformado = generarExcelBuffer(dataTransformada);
+          console.log("✅ Excel transformado generado en memoria");
+  
+          /* ======================
+         LOGIN MOZART
+      ====================== */
+  
+          contextGlobal = browser.contexts()[0];
+          pageMozartia = await contextGlobal.newPage();
+  
+          await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}`, {
+            waitUntil: "networkidle",
+          });
+  
+          await pageMozartia
+            .locator('input[name="email"]')
+            .fill(process.env.mozartEmailCemdiPrueba);
+          await pageMozartia
+            .locator('input[name="password"]')
+            .fill(process.env.mozartPassword);
+          await pageMozartia
+            .getByRole("button", { name: /Acceder al Sistema/i })
+            .click();
+  
+          // Esperar que cargue directamente
+          await pageMozartia.waitForFunction(
+            (tenant) => {
+              return (
+                location.pathname.startsWith(`/${tenant}`) ||
+                location.pathname.startsWith("/medical-authorizations")
+              );
+            },
+            tenant,
+            { timeout: 60000 },
+          );
+  
+          await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
+  
+          await pageMozartia.goto(
+            `https://new.app.mozartia.com/${tenant}/medical-authorizations`,
+            { waitUntil: "networkidle" },
+          );
+  
+          await pageMozartia
+            .getByRole("button", {
+              name: /Carga Masiva/i,
+            })
+            .waitFor({ state: "visible" });
+  
+          await pageMozartia
+            .getByRole("button", {
+              name: /Carga Masiva/i,
+            })
+            .click();
+  
+          const fileInput = pageMozartia.locator(
+            'input[type="file"][accept*=".xlsx"]',
+          );
+  
+          await fileInput.waitFor({ state: "visible" });
+  
+          // Subir archivo desde buffer
+          await fileInput.setInputFiles({
+            name: "autorizaciones.xlsx",
+            mimeType:
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            buffer: bufferTransformado,
+          });
+  
+          const cargarBtn = pageMozartia.getByRole("button", {
+            name: /Cargar Archivo/i,
+          });
+  
+          await pageMozartia
+            .locator('button:not([disabled]):has-text("Cargar Archivo")')
+            .waitFor({ state: "visible", timeout: 15000 });
+  
+          await cargarBtn.click();
+  
+          await page.waitForTimeout(2000);
+          
+          console.log("✅ Excel subido a Mozart");
+        } catch (error) {
+          console.error("Error en proceso asíncrono:", error);
+        } finally {
+          console.log("🔒 Cerrando sesión Hyperbrowser...");
+  
+          try {
+            if (browser) {
+              await browser.close();
+            }
+          } catch (e) {
+            console.log("Error cerrando browser:", e.message);
+          }
+  
+          console.log("✅ Sesión cerrada correctamente");
+        }
+      })();
+    } catch (error) {
+      console.error("Error iniciando sesión:", error);
+      res.status(500).send("Error iniciando el proceso");
+    }
+}
+
+export const verificarCita = async (req, res) => {
+  const { fecha, tenant } = req.body
+
+  const fechaCita = (() => {
+    if (!fecha) return fecha;
+
+    const separador = fecha.includes('/') ? '/' : '-';
+    const partes = fecha.split(separador);
+
+    if (partes.length !== 3) {
+      throw new Error(`Formato de fecha inválido: ${fecha}`);
+    }
+
+    // Si ya está en formato YYYY-MM-DD
+    if (partes[0].length === 4) return fecha;
+
+    const [dia, mes, anio] = partes;
+    return `${anio}-${mes}-${dia}`;
+  })();
+  
+  const usuario = process.env.USUARIOGUAJIRA
+  const clave = process.env.CLAVEGUAJIRA
+  const profileId = process.env.profileIdGuajira
+
+  let session = null;
+  let browser = null;
+  let procesando = true;
+
+  try {
+    // Intentar con el perfil existente
+    session = await client.sessions.create({ 
+      acceptCookies: true,
+      profile: {
+        id: profileId,
+        persistChanges: true,
+      }
+    });
+
+    browser = await chromium.connectOverCDP(session.wsEndpoint);
+    let context = browser.contexts()[0];
+    let page = context.pages()[0];
+
+    const manejarModalActualizacion = (paginaActual) => {
+      (async () => {
+        while (procesando) {
+          try {
+            const btnPostergar = paginaActual.locator('.q-dialog button span.block', {
+              hasText: 'Postergar'
+            }).first();
+            if (await btnPostergar.count() > 0) {
+              console.log("🔔 Modal de actualización detectado - Postergando...");
+              await btnPostergar.click();
+            }
+          } catch (e) {}
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      })();
+    };
+
+    manejarModalActualizacion(page);
+
+    await page.goto("https://api-test.qrystalos.com/#/autenticarse");
+
+    const selectorInput = 'input[aria-label="Organización *"]';
+    await page.click(selectorInput);
+    await page.fill(selectorInput, 'Pruebas Clinica esperanza');
+    await page.click('div.q-item span:has-text("Pruebas Clinica esperanza")');
+
+    await page.locator('input[aria-label="Usuario *"]').fill(usuario);
+    await page.locator('input[aria-label="Clave Secreta *"]').fill(clave);
+
+    await page.click('button:has-text("Continuar")');
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(1500);
+
+    await page.goto("https://api-test.qrystalos.com/#/ce", { waitUntil: "networkidle" });
+
+        // Continuar con el flujo normal
+        await page.goto("https://api-test.qrystalos.com/#/ce", {
+          waitUntil: "networkidle"
+        });
+
+        await page.waitForTimeout(3000);
+
+        await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
+          waitUntil: "networkidle"
+        });
+
+        console.log("✅ Entró a Agenda correctamente");
+
+        const fechaInput = page.locator('input[aria-label="Fecha"]');
+        await fechaInput.fill(fechaCita);
+
+        const especialidad = page.locator('input[aria-label="Seleccione una especialidad"]');
+        await especialidad.click();
+        await especialidad.fill('PERINATOLOGÍA');
+
+        // esperar opción
+        const opcion = page.locator('.q-menu .q-item', {
+          hasText: 'PERINATOLOGÍA O MEDICINA FETAL'
+        }).first();
+
+        await opcion.waitFor();
+        await opcion.click();
+
+        await page.waitForTimeout(1500);
+        await page.getByRole('button', { name: 'Ocupado' }).click();
+        await page.waitForTimeout(1000);
+
+        // Seleccionar todas las filas que tengan "Ocupado"
+        const citasCumplidas = page.locator('td.q-td.cursor-pointer.bg-red-2');
+
+        const totalCitas = await citasCumplidas.count();
+        console.log(`Total citas Ocupados encontradas: ${totalCitas}`);
+
+        const cedulas = [];
+
+        for (let i = 0; i < totalCitas; i++) {
+          const citas = page.locator('td.q-td.cursor-pointer.bg-red-2');
+          
+          await citas.nth(i).click();
+          await page.waitForTimeout(1500);
+
+          // Esperar que aparezca la barra de detalle
+          const panel = page.locator('.cit-detail-scroll');
+          await panel.waitFor({ state: 'visible', timeout: 8000 });
+
+          // Cédula: busca el div con clase text-link dentro de cit-detail-bar
+          const cedulaEl = panel.locator('.q-item__label.text-link').first();
+          await cedulaEl.waitFor({ timeout: 5000 });
+          const textoCedula = (await cedulaEl.innerText()).trim();
+          const tipoCedula = textoCedula.split(' ')[0];       // "CC"
+          const numeroCedula = textoCedula.split(' ')[1];     // "1120748866"
+
+          // Fecha: busca el div con cit-detail-value text-bold text-negative
+          const fechaEl = panel.locator('.q-item__label.cit-detail-value.text-bold.text-negative').first();
+          await fechaEl.waitFor({ timeout: 5000 });
+          const textoFecha = (await fechaEl.innerText()).trim();
+          const solofecha = textoFecha.split(' ')[0];          // "08/04/2026"
+          const horacita = textoFecha.split(' ')[1];           // "16:10"
+          const estado = textoFecha.split(' - ')[1];           // "No Asistio"
+
+          // Duración: busca el div con text-green-10
+          const duracionEl = panel.locator('.q-item__label.cit-detail-caption', { hasText: 'Duración' })
+            .locator('..') // sube al q-item__section
+            .locator('.q-item__label.cit-detail-value');
+            
+          const duracion = (await duracionEl.innerText()).trim();
+
+          // Servicio: busca el span con el nombre dentro del card section
+          const servicioEl = panel.locator('.q-item__label.ellipsis span.text-weight-medium').nth(1);
+          await servicioEl.waitFor({ timeout: 5000 });
+          const servicio = (await servicioEl.innerText()).trim(); // "ECOGRAFIA OBSTETRICA TRANSABDOMINAL"
+
+          // Modalidad
+          const modalidadEl = panel.locator('.q-item__label.cit-detail-caption', { hasText: 'Modalidad' })
+            .locator('..')
+            .locator('.q-item__label.cit-detail-value');
+
+          const modalidad = (await modalidadEl.innerText()).trim().split('/')[0].trim(); // "Presencial"
+
+          // Doctor
+          const doctorEl = panel.locator('.q-item__label.cit-detail-caption', { hasText: 'Profesional' })
+            .locator('..')
+            .locator('.q-item__label.ellipsis.cit-detail-value.text-bold');
+
+          const doctor = (await doctorEl.innerText()).trim(); // "MARIA MARGARITA MAZZA RAPAGÑA"
+
+          // Sede
+          const sedeEl = panel.locator('.q-item__label.cit-detail-caption', { hasText: 'Sede del Paciente' })
+            .locator('..')
+            .locator('.q-item__label.cit-detail-value');
+
+          const sede = (await sedeEl.innerText()).trim().split(' - ')[1].trim(); // "CLINICA ESPERANZA SAS BIC"
+
+          cedulas.push({ 
+            tipo: tipoCedula, 
+            numero: numeroCedula,
+            fechaCita: solofecha,
+            horaCita: horacita,
+            estadoCita: estado,
+            duracion: duracion,
+            servicio: servicio,
+            modalidad: modalidad,
+            doctor: doctor,
+            sede: sede
+          });
+
+
+          // Cerrar usando el botón con ícono "close" dentro de la barra de detalle
+          const btnCerrar = page.locator('.cit-detail-bar button').last();
+          await btnCerrar.waitFor({ state: 'visible', timeout: 5000 });
+          await btnCerrar.click();
+
+          // Esperar que el panel se cierre
+          await panel.waitFor({ state: 'hidden', timeout: 5000 });
+          await page.waitForTimeout(800);
+        }
+
+        console.log('Cédulas extraídas:', cedulas);
+        procesando = false;
+
+        let mozartDataDoctor = null;
+        try {
+          const mozartResponseDoctor = await fetch("https://new.api.mozartia.com/api/external/doctors", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": process.env.MOZART_API_KEY
+            },
+            body: JSON.stringify({
+              tenant: "clinicaesperanza",
+              especialidad: "Perinatología"
+            })
+          });
+          mozartDataDoctor = await mozartResponseDoctor.json();
+        } catch (error) {
+          console.error("Error fetch Mozart para doctor:", error.message);
+        }
+
+        const agendamientos = [];
+
+        for (const paciente of cedulas) {
+          try {
+            const mozartResponsePatient = await fetch("https://new.api.mozartia.com/api/external/patient-info", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-api-key": process.env.MOZART_API_KEY
+              },
+              body: JSON.stringify({
+                tenant: "clinicaesperanza",
+                identificacion: paciente.numero
+              })
+            });
+
+            const mozartDataPatient = await mozartResponsePatient.json();
+            
+            // Fecha en formato YYYY-MM-DD
+            const [dia, mes, anio] = paciente.fechaCita.split('/');
+            const fechaFormateada = `${anio}-${mes}-${dia}`;
+
+            const duracionNum = paciente.duracion === 'No definido' || !paciente.duracion
+              ? 20
+              : parseInt(paciente.duracion);
+
+            const autorizacionEncontrada = mozartDataPatient.data.autorizaciones?.find(a => 
+              a.agendada === false &&
+              a.activo === true &&
+              a.estaVigente === true &&
+              a.servicio.toUpperCase().includes(paciente.servicio.toUpperCase())
+            );
+
+            const doctorEncontrado = mozartDataDoctor.data.doctores?.find(d => 
+              d.nombre.toUpperCase().includes(paciente.doctor.toUpperCase()) ||
+              paciente.doctor.toUpperCase().includes(d.nombre.toUpperCase())
+            );
+
+            const agendamiento = {
+              tenant: "clinicaesperanza",
+              pacienteId: mozartDataPatient.data.paciente.id,
+              doctorId: doctorEncontrado?.id ?? null,
+              autorizacionId: autorizacionEncontrada?.id ?? null,
+              fecha: fechaFormateada,
+              hora: paciente.horaCita,
+              tipo: paciente.modalidad,
+              duracion: duracionNum,
+              especialidad: "Perinatología"
+            };
+
+            if (!agendamiento.pacienteId || !agendamiento.doctorId || !agendamiento.autorizacionId) {
+              console.warn(`⚠️ Skipping agendamiento para ${paciente.numero} - faltan datos:`, {
+                pacienteId: agendamiento.pacienteId,
+                doctorId: agendamiento.doctorId,
+                autorizacionId: agendamiento.autorizacionId
+              });
+              continue;
+            }
+
+            try {
+              const mozartResponseAppointment = await fetch("https://new.api.mozartia.com/api/external/appointment", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "x-api-key": process.env.MOZART_API_KEY
+                },
+                body: JSON.stringify(agendamiento)
+              });
+
+              const mozartDataAppointment = await mozartResponseAppointment.json();
+
+              if (mozartDataAppointment.success) {
+                console.log(`✅ Cita agendada para ${paciente.numero}:`, mozartDataAppointment);
+              } else {
+                console.warn(`⚠️ Error al agendar para ${paciente.numero}:`, mozartDataAppointment);
+              }
+
+              agendamientos.push({ paciente: paciente.numero, ...agendamiento, respuesta: mozartDataAppointment });
+
+            } catch (error) {
+              console.error(`❌ Error fetch agendamiento para ${paciente.numero}:`, error.message);
+            }
+
+          } catch (error) {
+            console.error(`Error fetch Mozart para ${paciente.numero}:`, error.message);
+          }
+
+          
+        }
+
+        
+        } catch (error) {
+        console.error("❌ Error:", error.message);
+        if (!res.headersSent) {
+          res.status(500).json({
+            mensaje: "Error al consultar el estado de la cita",
+            error: error.message,
+          });
+        }
+  }finally {
+    procesando = false;
+    try {
+      if (browser) await browser.close();
+      if (session) await client.sessions.stop(session.id);
+      console.log("✅ Sesión cerrada correctamente");
+    } catch (e) {
+      console.error("⚠️ Error al cerrar sesión:", e.message);
+    }
+  }
+}
+
+export const disponibilidadQrystalMozart = async (req, res) => {
+  const { tenant } = req.body
+  
+  const usuario = process.env.USUARIOGUAJIRA
+  const clave = process.env.CLAVEGUAJIRA
+  const profileId = process.env.profileIdGuajira
+
+  let session = null;
+  let browser = null;
+  let procesando = true;
+
+  try {
+    // Intentar con el perfil existente
+    session = await client.sessions.create({ 
+      acceptCookies: true,
+      profile: {
+        id: profileId,
+        persistChanges: true,
+      }
+    });
+
+    browser = await chromium.connectOverCDP(session.wsEndpoint);
+    let context = browser.contexts()[0];
+    let page = context.pages()[0];
+
+    const manejarModalActualizacion = (paginaActual) => {
+      (async () => {
+        while (procesando) {
+          try {
+            const btnPostergar = paginaActual.locator('.q-dialog button span.block', {
+              hasText: 'Postergar'
+            }).first();
+            if (await btnPostergar.count() > 0) {
+              console.log("🔔 Modal de actualización detectado - Postergando...");
+              await btnPostergar.click();
+            }
+          } catch (e) {}
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      })();
+    };
+
+    manejarModalActualizacion(page);
+
+    await page.goto("https://api-test.qrystalos.com/#/autenticarse");
+
+    const selectorInput = 'input[aria-label="Organización *"]';
+    await page.click(selectorInput);
+    await page.fill(selectorInput, 'Pruebas Clinica esperanza');
+    await page.click('div.q-item span:has-text("Pruebas Clinica esperanza")');
+
+    await page.locator('input[aria-label="Usuario *"]').fill(usuario);
+    await page.locator('input[aria-label="Clave Secreta *"]').fill(clave);
+
+    await page.click('button:has-text("Continuar")');
+    await page.waitForLoadState("networkidle");
+    await page.waitForTimeout(1500);
+
+    await page.goto("https://api-test.qrystalos.com/#/ce", { waitUntil: "networkidle" });
+
+        // Continuar con el flujo normal
+        await page.goto("https://api-test.qrystalos.com/#/ce", {
+          waitUntil: "networkidle"
+        });
+
+        await page.waitForTimeout(3000);
+
+        await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
+          waitUntil: "networkidle"
+        });
+
+        console.log("✅ Entró a Agenda correctamente");
+
+        const botonLista = page.locator('.accion-btn').nth(2);
+
+        await botonLista.waitFor();
+        await botonLista.click();
+
+        // abrir select especialidad
+        const especialidadInput = page.locator('input[aria-label="Especialidad"]');
+
+        await especialidadInput.click();
+
+        // escribir para filtrar
+        await especialidadInput.fill('PERINATOLOGÍA');
+
+        // esperar opción
+        const opcion = page.locator('.q-menu .q-item', {
+          hasText: 'PERINATOLOGÍA O MEDICINA FETAL'
+        }).first();
+
+        await opcion.waitFor();
+        await opcion.click();
+        await page.waitForTimeout(2000);
+
+        const fechaInicial = await page.locator('input[aria-label="Fecha Inicial"]').inputValue();
+        const fechaFinal = moment(fechaInicial).add(1, 'month').format('YYYY-MM-DD');
+
+        const inputFechaFinal = page.locator('input[aria-label="Fecha final"]');
+        await inputFechaFinal.fill(fechaFinal);
+
+        await page.waitForTimeout(1000);
+
+
+        // Extraer datos de todas las páginas
+        const extraerDatosTabla = async (page) => {
+          return await page.evaluate(() => {
+            const filas = document.querySelectorAll('.q-table tbody tr');
+            const datos = [];
+            filas.forEach(fila => {
+              const celdas = fila.querySelectorAll('td span.cursor-pointer');
+              if (celdas.length > 0) {
+                datos.push({
+                  dia: celdas[1]?.innerText?.trim(),
+                  fecha: celdas[2]?.innerText?.trim(),
+                });
+              }
+            });
+            return datos;
+          });
+        };
+
+        const todasLasCitas = [];
+
+        while (true) {
+          await page.waitForTimeout(1000);
+          const datos = await extraerDatosTabla(page);
+          todasLasCitas.push(...datos);
+
+          const btnSiguiente = page.locator('button[aria-label="Próxima página"]');
+          const estaDeshabilitado = await btnSiguiente.getAttribute('disabled');
+
+          if (estaDeshabilitado !== null) {
+            console.log("✅ Se llegó a la última página");
+            break;
+          }
+
+          await btnSiguiente.click();
+        }
+
+        // Si hay menos de 10 citas, ampliar a 2 meses
+        if (todasLasCitas.length < 5) {
+          console.log(`⚠️ Poca disponibilidad (${todasLasCitas.length} citas), ampliando a 2 meses...`);
+          todasLasCitas.length = 0; // limpiar
+
+          fechaFinal = moment(fechaInicial).add(2, 'months').format('YYYY-MM-DD');
+          await inputFechaFinal.fill(fechaFinal);
+          await page.waitForTimeout(1000);
+
+          while (true) {
+            await page.waitForTimeout(1000);
+            const datos = await extraerDatosTabla(page);
+            todasLasCitas.push(...datos);
+
+            const btnSiguiente = page.locator('button[aria-label="Próxima página"]');
+            const estaDeshabilitado = await btnSiguiente.getAttribute('disabled');
+
+            if (estaDeshabilitado !== null) {
+              console.log("✅ Se llegó a la última página (2 meses)");
+              break;
+            }
+
+            await btnSiguiente.click();
+          }
+        }
+
+        console.log("📅 Total citas encontradas:", todasLasCitas.length);
+        console.log("disponibilidad: ", todasLasCitas)
+
+        let mozartDataDoctor = null;
+        try {
+          const mozartResponseDoctor = await fetch("https://new.api.mozartia.com/api/external/availability", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-api-key": process.env.MOZART_API_KEY
+            },
+            body: JSON.stringify({
+              tenant: "clinicaesperanza",
+              doctorId: "697c9be4fedccd012168bda3",
+              especialidad: "Perinatología"
+            })
+          });
+          mozartDataDoctor = await mozartResponseDoctor.json();
+        } catch (error) {
+          console.error("Error fetch Mozart para doctor:", error.message);
+        }
+
+        } catch (error) {
+        console.error("❌ Error:", error.message);
+        if (!res.headersSent) {
+          res.status(500).json({
+            mensaje: "Error al consultar el estado de la cita",
+            error: error.message,
+          });
+        }
+      }
 }
