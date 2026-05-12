@@ -2720,7 +2720,7 @@ export const disponibilidadQrystalMozart = async (req, res) => {
           waitUntil: "networkidle"
         });
 
-        await page.waitForTimeout(3000);
+        await page.waitForTimeout(2000);
 
         await page.goto("https://api-test.qrystalos.com/#/ce/agendamiento", {
           waitUntil: "networkidle"
@@ -2748,7 +2748,7 @@ export const disponibilidadQrystalMozart = async (req, res) => {
 
         await opcion.waitFor();
         await opcion.click();
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(1500);
 
         const fechaInicial = await page.locator('input[aria-label="Fecha Inicial"]').inputValue();
         const fechaFinal = moment(fechaInicial).add(1, 'month').format('YYYY-MM-DD');
@@ -2780,7 +2780,7 @@ export const disponibilidadQrystalMozart = async (req, res) => {
         const todasLasCitas = [];
 
         while (true) {
-          await page.waitForTimeout(1000);
+          await page.waitForTimeout(500);
           const datos = await extraerDatosTabla(page);
           todasLasCitas.push(...datos);
 
@@ -2802,10 +2802,10 @@ export const disponibilidadQrystalMozart = async (req, res) => {
 
           fechaFinal = moment(fechaInicial).add(2, 'months').format('YYYY-MM-DD');
           await inputFechaFinal.fill(fechaFinal);
-          await page.waitForTimeout(1000);
+          await page.waitForTimeout(500);
 
           while (true) {
-            await page.waitForTimeout(1000);
+            await page.waitForTimeout(500);
             const datos = await extraerDatosTabla(page);
             todasLasCitas.push(...datos);
 
