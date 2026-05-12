@@ -2187,7 +2187,7 @@ export const VerificarAsistenciaCitaCristal = async (req, res) => {
 }
 
 export const descargarAutorizacionEsperanza = async (req, res) => {
-  const { tenant } = req.body
+  const { tenant } = req.body;
   const archivoExcel = req.file;
 
   if (!archivoExcel) {
@@ -2196,134 +2196,134 @@ export const descargarAutorizacionEsperanza = async (req, res) => {
     });
   }
 
-
   try {
-      session = await client.sessions.create({ acceptCookies: true });
-  
-      res.status(200).json({
-        mensaje: "Proceso iniciado",
-        liveUrl: session.liveUrl,
-      });
-  
-      console.log("preview: ", session.liveUrl);
-  
-      (async () => {
-        try {
-          browser = await chromium.connectOverCDP(session.wsEndpoint);
-          const context = browser.contexts()[0];
-          page = context.pages()[0];
-  
-          const bufferExcel = archivoExcel.buffer;
-          const dataOriginal = leerExcelDesdeBuffer(bufferExcel);
+    session = await client.sessions.create({ acceptCookies: true });
+    console.log("preview: ", session.liveUrl);
 
-          
-  
-          // ===== Procesar Excel =====
-          
-          const dataTransformada = transformarAutorizacionesEsperanza(dataOriginal);
-          const bufferTransformado = generarExcelBuffer(dataTransformada);
-          console.log("✅ Excel transformado generado en memoria");
-  
-          /* ======================
-         LOGIN MOZART
-      ====================== */
-  
-          contextGlobal = browser.contexts()[0];
-          pageMozartia = await contextGlobal.newPage();
-  
-          await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}`, {
-            waitUntil: "networkidle",
-          });
-  
-          await pageMozartia
-            .locator('input[name="email"]')
-            .fill(process.env.mozartEmailCemdiPrueba);
-          await pageMozartia
-            .locator('input[name="password"]')
-            .fill(process.env.mozartPassword);
-          await pageMozartia
-            .getByRole("button", { name: /Acceder al Sistema/i })
-            .click();
-  
-          // Esperar que cargue directamente
-          await pageMozartia.waitForFunction(
-            (tenant) => {
-              return (
-                location.pathname.startsWith(`/${tenant}`) ||
-                location.pathname.startsWith("/medical-authorizations")
-              );
-            },
-            tenant,
-            { timeout: 60000 },
-          );
-  
-          await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
-  
-          await pageMozartia.goto(
-            `https://new.app.mozartia.com/${tenant}/medical-authorizations`,
-            { waitUntil: "networkidle" },
-          );
-  
-          await pageMozartia
-            .getByRole("button", {
-              name: /Carga Masiva/i,
-            })
-            .waitFor({ state: "visible" });
-  
-          await pageMozartia
-            .getByRole("button", {
-              name: /Carga Masiva/i,
-            })
-            .click();
-  
-          const fileInput = pageMozartia.locator(
-            'input[type="file"][accept*=".xlsx"]',
-          );
-  
-          await fileInput.waitFor({ state: "visible" });
-  
-          // Subir archivo desde buffer
-          await fileInput.setInputFiles({
-            name: "autorizaciones.xlsx",
-            mimeType:
-              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            buffer: bufferTransformado,
-          });
-  
-          const cargarBtn = pageMozartia.getByRole("button", {
-            name: /Cargar Archivo/i,
-          });
-  
-          await pageMozartia
-            .locator('button:not([disabled]):has-text("Cargar Archivo")')
-            .waitFor({ state: "visible", timeout: 15000 });
-  
-          await cargarBtn.click();
-  
-          await page.waitForTimeout(2000);
-          
-          console.log("✅ Excel subido a Mozart");
-        } catch (error) {
-          console.error("Error en proceso asíncrono:", error);
-        } finally {
-          console.log("🔒 Cerrando sesión Hyperbrowser...");
-  
-          try {
-            if (browser) {
-              await browser.close();
-            }
-          } catch (e) {
-            console.log("Error cerrando browser:", e.message);
-          }
-  
-          console.log("✅ Sesión cerrada correctamente");
-        }
-      })();
-    } catch (error) {
-      console.error("Error iniciando sesión:", error);
-      res.status(500).send("Error iniciando el proceso");
+    browser = await chromium.connectOverCDP(session.wsEndpoint);
+    const context = browser.contexts()[0];
+    page = context.pages()[0];
+
+    const bufferExcel = archivoExcel.buffer;
+    const dataOriginal = leerExcelDesdeBuffer(bufferExcel);
+
+    // ===== Procesar Excel =====
+    const dataTransformada = transformarAutorizacionesEsperanza(dataOriginal);
+
+    
+    const personasSubidas = dataTransformada.map((row) => ({
+      cedula: row["Cédula *"],
+      nombre: row["Nombres *"],
+      servicio: row["Servicio *"],
+      autorizacion: row["Número de Autorización"],
+    }));
+
+    if (personasSubidas.length === 0) {
+      return res.status(200).json({
+        mensaje: "No se encontraron registros para subir",
+        personas: [],
+        total: 0,
+      });
     }
-}
+
+    const bufferTransformado = generarExcelBuffer(dataTransformada);
+    console.log("✅ Excel transformado generado en memoria");
+
+    /* ======================
+       LOGIN MOZART
+    ====================== */
+    contextGlobal = browser.contexts()[0];
+    pageMozartia = await contextGlobal.newPage();
+
+    await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}`, {
+      waitUntil: "networkidle",
+    });
+
+    await pageMozartia
+      .locator('input[name="email"]')
+      .fill(process.env.mozartEmailCemdiPrueba);
+    await pageMozartia
+      .locator('input[name="password"]')
+      .fill(process.env.mozartPassword);
+    await pageMozartia
+      .getByRole("button", { name: /Acceder al Sistema/i })
+      .click();
+
+    await pageMozartia.waitForFunction(
+      (tenant) => {
+        return (
+          location.pathname.startsWith(`/${tenant}`) ||
+          location.pathname.startsWith("/medical-authorizations")
+        );
+      },
+      tenant,
+      { timeout: 60000 }
+    );
+
+    await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
+
+    await pageMozartia.goto(
+      `https://new.app.mozartia.com/${tenant}/medical-authorizations`,
+      { waitUntil: "networkidle" }
+    );
+
+    await pageMozartia
+      .getByRole("button", { name: /Carga Masiva/i })
+      .waitFor({ state: "visible" });
+
+    await pageMozartia
+      .getByRole("button", { name: /Carga Masiva/i })
+      .click();
+
+    const fileInput = pageMozartia.locator(
+      'input[type="file"][accept*=".xlsx"]'
+    );
+    await fileInput.waitFor({ state: "visible" });
+
+    await fileInput.setInputFiles({
+      name: "autorizaciones.xlsx",
+      mimeType:
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      buffer: bufferTransformado,
+    });
+
+    await pageMozartia
+      .locator('button:not([disabled]):has-text("Cargar Archivo")')
+      .waitFor({ state: "visible", timeout: 15000 });
+
+    await pageMozartia
+      .getByRole("button", { name: /Cargar Archivo/i })
+      .click();
+
+    await page.waitForTimeout(2000);
+
+    console.log("✅ Excel subido a Mozart");
+
+    // ✅ Respuesta final con las personas procesadas
+    return res.status(200).json({
+      mensaje: "Autorizaciones cargadas exitosamente",
+      total: personasSubidas.length,
+      personas: personasSubidas,
+    });
+
+  } catch (error) {
+    console.error("Error en el proceso:", error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        mensaje: "Error durante el proceso",
+        error: error.message,
+      });
+    }
+  } finally {
+    console.log("🔒 Cerrando sesión Hyperbrowser...");
+    try {
+      if (browser) await browser.close();
+    } catch (e) {
+      console.log("Error cerrando browser:", e.message);
+    }
+    console.log("✅ Sesión cerrada correctamente");
+  }
+};
 
 export const verificarCita = async (req, res) => {
   const { fecha, tenant } = req.body

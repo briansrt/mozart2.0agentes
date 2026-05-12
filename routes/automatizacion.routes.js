@@ -22,7 +22,7 @@ router.post("/reagendarCitaQrystalos", ReAgendarCitaGuajiraCristal)
 router.post("/cancelarCitaQrystalos", CancelarCitaGuajiraCristal)
 router.post("/verificarCitaCumplida", VerificarAsistenciaCitaCristal)
 router.post(
-  "/descargar-autorizacion",
+  "/subirAutorizacion",
   upload.single("excel"),
   descargarAutorizacionEsperanza
 );
