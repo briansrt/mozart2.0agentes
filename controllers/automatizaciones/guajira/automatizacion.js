@@ -2657,7 +2657,6 @@ export const verificarCita = async (req, res) => {
 }
 
 export const disponibilidadQrystalMozart = async (req, res) => {
-  const { tenant } = req.body
   
   const usuario = process.env.USUARIOGUAJIRA
   const clave = process.env.CLAVEGUAJIRA
@@ -2823,26 +2822,12 @@ export const disponibilidadQrystalMozart = async (req, res) => {
         }
 
         console.log("📅 Total citas encontradas:", todasLasCitas.length);
-        console.log("disponibilidad: ", todasLasCitas)
 
-        let mozartDataDoctor = null;
-        try {
-          const mozartResponseDoctor = await fetch("https://new.api.mozartia.com/api/external/availability", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "x-api-key": process.env.MOZART_API_KEY
-            },
-            body: JSON.stringify({
-              tenant: "clinicaesperanza",
-              doctorId: "697c9be4fedccd012168bda3",
-              especialidad: "Perinatología"
-            })
-          });
-          mozartDataDoctor = await mozartResponseDoctor.json();
-        } catch (error) {
-          console.error("Error fetch Mozart para doctor:", error.message);
-        }
+        res.status(200).json({
+          mensaje: "Disponibilidad consultada correctamente",
+          total: todasLasCitas.length,
+          disponibilidad: todasLasCitas,
+        });
 
         } catch (error) {
         console.error("❌ Error:", error.message);
@@ -2852,5 +2837,17 @@ export const disponibilidadQrystalMozart = async (req, res) => {
             error: error.message,
           });
         }
+      }finally {
+        
+        procesando = false;
+
+        if (browser) {
+          await browser.close().catch(e => console.warn("⚠️ Error cerrando browser:", e.message));
+        }
+        if (session) {
+          await client.sessions.stop(session.id).catch(e => console.warn("⚠️ Error cerrando sesión:", e.message));
+        }
+
+        console.log("🔒 Sesión y browser cerrados correctamente");
       }
 }

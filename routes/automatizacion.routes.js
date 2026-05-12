@@ -1,6 +1,6 @@
 import express from "express";
 import { CrearPQRSCoosalud, ConsultarRadicadoPQRS, enviarCorreosDesdeExcel } from "../controllers/automatizaciones/coosalud/automatizacion.js";
-import { AutorizacionGuajira, ConsultarAutorizacion, AgendarCitaGuajiraCristal, ReAgendarCitaGuajiraCristal, CancelarCitaGuajiraCristal, VerificarAsistenciaCitaCristal, descargarAutorizacionEsperanza } from "../controllers/automatizaciones/guajira/automatizacion.js";
+import { AutorizacionGuajira, ConsultarAutorizacion, AgendarCitaGuajiraCristal, ReAgendarCitaGuajiraCristal, CancelarCitaGuajiraCristal, VerificarAsistenciaCitaCristal, disponibilidadQrystalMozart, descargarAutorizacionEsperanza } from "../controllers/automatizaciones/guajira/automatizacion.js";
 import { descargarAutorizacion } from "../controllers/automatizaciones/famisanar/automatizacion.js";
 import { AutorizacionColpatria, AutorizacionEnfaso } from "../controllers/automatizaciones/enfaso/automatizacion.js";
 import multer from "multer";
@@ -21,6 +21,7 @@ router.post("/agendarCitaQrystalos", AgendarCitaGuajiraCristal)
 router.post("/reagendarCitaQrystalos", ReAgendarCitaGuajiraCristal)
 router.post("/cancelarCitaQrystalos", CancelarCitaGuajiraCristal)
 router.post("/verificarCitaCumplida", VerificarAsistenciaCitaCristal)
+router.get("/disponibilidad", disponibilidadQrystalMozart)
 router.post(
   "/subirAutorizacion",
   upload.single("excel"),
