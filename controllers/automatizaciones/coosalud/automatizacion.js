@@ -1014,3 +1014,292 @@ export const confirmarCitaHSM = async (req, res) => {
   //   }
   }
 }
+
+
+export const extraerInfoHSM = async (req, res) => {
+  const { numeroCaso } = req.body
+  const profileId = process.env.profileIdHSM || "dab90a80-9fa2-45ac-84e6-08baa803eeb7"
+  const password = process.env.passwordHSM;
+
+  let session;
+  let browser;
+
+  try {
+    session = await client.sessions.create({ 
+      acceptCookies: true,
+      saveDownloads: true,
+      profile: {
+        id: profileId,
+        persistChanges: false,
+      }
+    });
+
+    browser = await chromium.connectOverCDP(session.wsEndpoint);
+    let context = browser.contexts()[0];
+    let page = context.pages()[0];
+
+    await page.goto(
+      `https://portal.coosalud.com/Login/?OriginalURL=https://portal.coosalud.com/HSM/managementReferenciaAmbulatoria?CaseNumber=${numeroCaso}&TextoPortal=HSM`,
+      { waitUntil: 'networkidle' }
+    );
+
+    const sesionExpirada = await detectarSesionExpiradaHSM(page);
+
+    if (sesionExpirada) {
+      console.log("⚠️ Sesión expirada - Renovando perfil...");
+      await browser.close();
+      await client.sessions.stop(session.id);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      session = await client.sessions.create({ 
+        acceptCookies: true,
+        saveDownloads: true,
+        profile: {
+          id: profileId,
+          persistChanges: true,
+        }
+      });
+
+      browser = await chromium.connectOverCDP(session.wsEndpoint);
+      context = browser.contexts()[0];
+      page = context.pages()[0];
+      
+      await page.goto(`https://portal.coosalud.com/Login/?OriginalURL=https://portal.coosalud.com/HSM/managementReferenciaAmbulatoria?CaseNumber=${numeroCaso}&TextoPortal=HSM`);
+      await page.locator('button:has-text("Colaboradores Coosalud")').click();
+      await page.waitForLoadState('networkidle');
+      // await page.waitForSelector('[data-test-id="jorivera.coontacto@cooext.com"]');
+      // await page.click('[data-test-id="jorivera.coontacto@cooext.com"]');
+
+      // // Esperar el campo de contraseña y escribirla
+      // await page.waitForSelector('#i0118');
+      // await page.fill('#i0118', password);
+
+      // // Click en el botón de submit
+      // await page.click('#idSIButton9');
+
+      // await page.waitForLoadState('networkidle');
+    }
+    
+    // Esperar a que cargue el formulario
+    await page.waitForSelector('#b1-Input_DocumentNumber19');
+
+    const datosPaciente = await page.evaluate(() => {
+      const resultado = {};
+
+      // Busca todos los contenedores que tienen un título (.tittleData) y un valor (data-expression)
+      const contenedores = document.querySelectorAll('[data-container]');
+
+      contenedores.forEach(contenedor => {
+        const titulo = contenedor.querySelector('.tittleData');
+        const valor = contenedor.querySelector('[data-expression]');
+
+        if (titulo && valor) {
+          const key = titulo.textContent.trim().replace(':', '');
+          const val = valor.textContent.trim();
+
+          // Mapear los campos que necesitas
+          const mapeo = {
+            'Nombre':         'nombre',
+            'N° de documento':'documento',
+            'Régimen':        'regimen',
+            'Estado':         'estado',
+          };
+
+          if (mapeo[key]) {
+            resultado[mapeo[key]] = val;
+          }
+        }
+      });
+
+      return resultado;
+    });
+
+    const servicios = await page.evaluate(() => {
+      const filas = document.querySelectorAll('table.table tbody tr.table-row');
+      
+      return Array.from(filas).map(fila => {
+        const cantidad = fila.querySelector('td[data-header="Cantidad"] [data-expression]')?.textContent.trim();
+        const celdaServicio = fila.querySelector('td[data-header="Servicio"]');
+        const codigoServicio = celdaServicio?.querySelectorAll('[data-expression]')[0]?.textContent.trim();
+        const nombreServicio = celdaServicio?.querySelectorAll('[data-expression]')[1]?.textContent.trim();
+        const valorServicio = fila.querySelector('td[data-header="Valor servicio"] [data-expression]')?.textContent.trim();
+
+        return {
+          codigo: codigoServicio,
+          nombre: nombreServicio,
+        };
+      });
+    });
+    // Hacer click en el botón para que aparezca el link
+    await page.locator('button:has-text("Orden médica")').click();
+
+    // Esperar a que aparezca el contenedor con el link
+    await page.waitForSelector('.observationContent a[data-link]');
+
+    // Interceptar la nueva pestaña al hacer click en "Descargar archivo"
+    const [popup] = await Promise.all([
+      page.context().waitForEvent('page'),
+      page.locator('.observationContent a[data-link]').click()
+    ]);
+
+    // Esperar a que la nueva página cargue su URL final (por si hay redirects)
+    await popup.waitForLoadState('load');
+
+    const linkOrden = popup.url();
+
+    await popup.close();
+
+    return res.status(200).json({
+      ok: true,
+      data: {
+        ...datosPaciente,
+        linkOrden,
+        servicios
+      }
+    });
+
+
+  } catch (error) {
+      console.error("❌ Error en confirmarCitaHSM:", error);
+
+      return res.status(500).json({
+        ok: false,
+        message: "Error al actualizar la cita en HSM",
+        error: error.message
+      }); 
+    }
+}
+
+
+export const cambiarEstadoHSM = async (req, res) => {
+  const { numeroCaso, estado } = req.body
+  const profileId = process.env.profileIdHSM || "dab90a80-9fa2-45ac-84e6-08baa803eeb7"
+  const password = process.env.passwordHSM;
+
+  const ESTADOS = {
+    "Por transcribir": "3",
+    "Por aprobar": "2",
+    "Por asignación de cita": "4",
+    "Por confirmar asistencia": "7",
+    "Finalizado": "6"
+  };
+
+  let session;
+  let browser;
+
+  try {
+    session = await client.sessions.create({ 
+      acceptCookies: true,
+      saveDownloads: true,
+      profile: {
+        id: profileId,
+        persistChanges: false,
+      }
+    });
+
+    browser = await chromium.connectOverCDP(session.wsEndpoint);
+    let context = browser.contexts()[0];
+    let page = context.pages()[0];
+
+    await page.goto(
+      `https://portal.coosalud.com/Login/?OriginalURL=https://portal.coosalud.com/HSM/managementReferenciaAmbulatoria?CaseNumber=${numeroCaso}&TextoPortal=HSM`,
+      { waitUntil: 'networkidle' }
+    );
+
+    const sesionExpirada = await detectarSesionExpiradaHSM(page);
+
+    if (sesionExpirada) {
+      console.log("⚠️ Sesión expirada - Renovando perfil...");
+      await browser.close();
+      await client.sessions.stop(session.id);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      session = await client.sessions.create({ 
+        acceptCookies: true,
+        saveDownloads: true,
+        profile: {
+          id: profileId,
+          persistChanges: true,
+        }
+      });
+
+      browser = await chromium.connectOverCDP(session.wsEndpoint);
+      context = browser.contexts()[0];
+      page = context.pages()[0];
+      
+      await page.goto(`https://portal.coosalud.com/Login/?OriginalURL=https://portal.coosalud.com/HSM/managementReferenciaAmbulatoria?CaseNumber=${numeroCaso}&TextoPortal=HSM`);
+      await page.locator('button:has-text("Colaboradores Coosalud")').click();
+      await page.waitForLoadState('networkidle');
+      // await page.waitForSelector('[data-test-id="jorivera.coontacto@cooext.com"]');
+      // await page.click('[data-test-id="jorivera.coontacto@cooext.com"]');
+
+      // // Esperar el campo de contraseña y escribirla
+      // await page.waitForSelector('#i0118');
+      // await page.fill('#i0118', password);
+
+      // // Click en el botón de submit
+      // await page.click('#idSIButton9');
+
+      // await page.waitForLoadState('networkidle');
+    }
+    
+    // Esperar a que cargue el formulario
+    await page.waitForSelector('#b1-Input_DocumentNumber19');
+
+
+    // ── Cambiar Estado ──────────────────────────────────────────────
+    if (estado !== undefined) {
+      const estadoValue = ESTADOS[estado];
+      
+      if (!estadoValue) {
+        return res.status(400).json({
+          ok: false,
+          message: `Estado inválido. Opciones válidas: ${Object.keys(ESTADOS).join(", ")}`
+        });
+      }
+
+      // Abrir dropdown
+      const estadoDropdown = page.locator('#b1-b131-DropdownSearch .vscomp-toggle-button');
+      await estadoDropdown.click({ force: true });
+      await page.waitForTimeout(1500);
+
+      // Tomar el primero visible de los 3
+      const estadoOption = page.locator(`.vscomp-options .vscomp-option[data-value="${estadoValue}"]`).first();
+      await estadoOption.waitFor({ state: 'visible', timeout: 10000 });
+      await estadoOption.click({ force: true });
+
+      // Verificar que el valor quedó seleccionado
+      await page.waitForFunction(
+        (value) => {
+          const input = document.querySelector('#b1-b131-DropdownSearch .vscomp-hidden-input');
+          return input && input.value === value;
+        },
+        estadoValue,
+        { timeout: 10000 }
+      );
+      
+      console.log(`✅ Estado cambiado a: ${estado}`);
+    }
+
+    // ── Click en Guardar ────────────────────────────────────────────
+    // const guardarBtn = page.locator('button.btn.btn-primary:has(span:text("Guardar"))');
+    // await guardarBtn.click();
+    // await page.waitForLoadState('networkidle');
+    // console.log("✅ Guardado exitoso");
+
+    return res.status(200).json({
+      ok: true,
+      message: "Estado actualizado correctamente en HSM",
+    });
+
+
+    } catch (error) {
+      console.error("❌ Error en confirmarCitaHSM:", error);
+
+      return res.status(500).json({
+        ok: false,
+        message: "Error al actualizar la cita en HSM",
+        error: error.message
+      }); 
+    }
+}

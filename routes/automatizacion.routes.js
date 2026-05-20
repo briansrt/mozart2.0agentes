@@ -1,5 +1,5 @@
 import express from "express";
-import { CrearPQRSCoosalud, ConsultarRadicadoPQRS, enviarCorreosDesdeExcel } from "../controllers/automatizaciones/coosalud/automatizacion.js";
+import { CrearPQRSCoosalud, ConsultarRadicadoPQRS, enviarCorreosDesdeExcel, extraerInfoHSM, cambiarEstadoHSM } from "../controllers/automatizaciones/coosalud/automatizacion.js";
 import { AutorizacionGuajira, ConsultarAutorizacion, AgendarCitaGuajiraCristal, ReAgendarCitaGuajiraCristal, CancelarCitaGuajiraCristal, VerificarAsistenciaCitaCristal, disponibilidadQrystalMozart, descargarAutorizacionEsperanza } from "../controllers/automatizaciones/guajira/automatizacion.js";
 import { descargarAutorizacion } from "../controllers/automatizaciones/famisanar/automatizacion.js";
 import { AutorizacionColpatria, AutorizacionEnfaso } from "../controllers/automatizaciones/enfaso/automatizacion.js";
@@ -30,6 +30,8 @@ router.post(
 
 router.post("/crearPQRSCoosalud", CrearPQRSCoosalud)
 router.post("/consultarRadicadoPQRS", ConsultarRadicadoPQRS)
+router.post("/extraerInfoHSM", extraerInfoHSM)
+router.post("/cambiarEstadoHSM", cambiarEstadoHSM)
 router.post("/enviarCorreo", enviarCorreosDesdeExcel);
 
 export default router;
