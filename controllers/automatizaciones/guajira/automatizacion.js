@@ -1011,6 +1011,15 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
         // esperar que cargue la búsqueda
         await page.waitForTimeout(1500);
 
+        const sinDatos = page.locator('.q-table__bottom--nodata');
+        if (await sinDatos.count() > 0) {
+          return res.status(404).json({
+            mensaje: "Paciente no encontrado en Cristal",
+            documento,
+            encontrado: false
+          });
+        }
+
         // 3️⃣ Esperar la tabla con resultados
         await page.waitForSelector('.q-table tbody tr.q-tr.cursor-pointer');
 
