@@ -1245,7 +1245,52 @@ export const AgendarCitaGuajiraCristal = async (req, res) => {
 
         await botonAgendar.waitFor({ state: 'visible' });
         await botonAgendar.click();
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(1000);
+
+        const resultado = await Promise.race([
+          page.waitForSelector('.q-notification .q-notification__message', { timeout: 8000 })
+            .then(el => ({ tipo: 'exito', elemento: el })),
+          page.waitForSelector('.q-card.my-card .q-bar--dark.bg-red-8', { timeout: 8000 })
+            .then(el => ({ tipo: 'error', elemento: el })),
+        ]);
+
+        if (resultado.tipo === 'error') {
+          // Extraer el mensaje de error del modal
+          const elementosError = page.locator('.q-card.my-card .q-item__label');
+          const totalErrores = await elementosError.count();
+
+          const errores = [];
+          for (let i = 0; i < totalErrores; i++) {
+            const texto = await elementosError.nth(i).textContent();
+            if (texto?.trim()) errores.push(texto.trim());
+          }
+
+          // Cerrar el modal (botón "Entendido")
+          const btnEntendido = page.locator('.q-card.my-card button span.block', {
+            hasText: 'Entendido'
+          }).first();
+          if (await btnEntendido.count() > 0) {
+            await btnEntendido.click();
+          }
+
+          return res.status(409).json({
+            mensaje: "Error al agendar en Cristal",
+            errores,
+            totalErrores: errores.length,
+            cristal: "fallido",
+            mozart: "No se agendo en mozart"
+          });
+        }
+
+        // Verificar que el toast diga lo esperado
+        const textoToast = await resultado.elemento.textContent();
+        if (!textoToast?.includes('Agendada Exitosamente')) {
+          return res.status(500).json({
+            mensaje: "Respuesta inesperada de Cristal tras agendar",
+            textoRecibido: textoToast?.trim(),
+            cristal: "incierto",
+          });
+        }
 
         console.log("✅ Cita agendada en Cristal exitosamente");
         
