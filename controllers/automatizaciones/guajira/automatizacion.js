@@ -2242,11 +2242,11 @@ export const VerificarAsistenciaCitaCristal = async (req, res) => {
 
 export const descargarAutorizacionEsperanza = async (req, res) => {
   const { tenant } = req.body;
-  const archivoExcel = req.file;
+  const archivosExcel = req.files;
 
-  if (!archivoExcel) {
+  if (!archivosExcel || archivosExcel.length === 0) {
     return res.status(400).json({
-      mensaje: "No se recibió archivo Excel",
+      mensaje: "No se recibieron archivos Excel",
     });
   }
 
@@ -2257,22 +2257,21 @@ export const descargarAutorizacionEsperanza = async (req, res) => {
     browser = await chromium.connectOverCDP(session.wsEndpoint);
     const context = browser.contexts()[0];
     page = context.pages()[0];
-
-    const bufferExcel = archivoExcel.buffer;
-    const dataOriginal = leerExcelDesdeBuffer(bufferExcel);
-
-    // ===== Procesar Excel =====
-    const dataTransformada = transformarAutorizacionesEsperanza(dataOriginal);
-
     
-    const personasSubidas = dataTransformada.map((row) => ({
-      cedula: row["Cédula *"],
-      nombre: row["Nombres *"],
-      servicio: row["Servicio *"],
-      autorizacion: row["Número de Autorización"],
-    }));
+    let dataTotal = [];
 
-    if (personasSubidas.length === 0) {
+    for (const archivoExcel of archivosExcel) {
+      const bufferExcel = archivoExcel.buffer;
+
+      const dataOriginal = leerExcelDesdeBuffer(bufferExcel);
+
+      const dataTransformada =
+        transformarAutorizacionesEsperanza(dataOriginal);
+
+      dataTotal.push(...dataTransformada);
+    }
+
+    if (dataTotal.length === 0) {
       return res.status(200).json({
         mensaje: "No se encontraron registros para subir",
         personas: [],
@@ -2280,7 +2279,15 @@ export const descargarAutorizacionEsperanza = async (req, res) => {
       });
     }
 
-    const bufferTransformado = generarExcelBuffer(dataTransformada);
+    
+    const personasSubidas = dataTotal.map((row) => ({
+      cedula: row["Cédula *"],
+      nombre: row["Nombres *"],
+      servicio: row["Servicio *"],
+      autorizacion: row["Número de Autorización"],
+    }));
+
+    const bufferTransformado = generarExcelBuffer(dataTotal);
     console.log("✅ Excel transformado generado en memoria");
 
     /* ======================
@@ -2295,7 +2302,7 @@ export const descargarAutorizacionEsperanza = async (req, res) => {
 
     await pageMozartia
       .locator('input[name="email"]')
-      .fill(process.env.mozartEmailCemdiPrueba);
+      .fill(process.env.mozartEmail);
     await pageMozartia
       .locator('input[name="password"]')
       .fill(process.env.mozartPassword);

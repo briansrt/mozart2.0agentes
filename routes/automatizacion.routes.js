@@ -24,7 +24,7 @@ router.post("/verificarCitaCumplida", VerificarAsistenciaCitaCristal)
 router.get("/disponibilidad", disponibilidadQrystalMozart)
 router.post(
   "/subirAutorizacion",
-  upload.single("excel"),
+  upload.array("excel", 10),
   descargarAutorizacionEsperanza
 );
 
