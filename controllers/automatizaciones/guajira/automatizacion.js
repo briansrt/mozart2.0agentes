@@ -2035,7 +2035,7 @@ export const VerificarAsistenciaCitaCristal = async (req, res) => {
         const contextGlobal = browser.contexts()[0];
         const pageMozartia = await contextGlobal.newPage();
 
-          await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}/login`, {
+          await pageMozartia.goto(`https://salud.mozartai.com.co/${tenant}/login`, {
             waitUntil: "networkidle",
           });
 
@@ -2069,7 +2069,7 @@ export const VerificarAsistenciaCitaCristal = async (req, res) => {
           await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
 
           await pageMozartia.goto(
-            `https://new.app.mozartia.com/${tenant}/patients`,
+            `https://salud.mozartai.com.co/${tenant}/patients`,
             { waitUntil: "networkidle" },
           );
 
@@ -2088,7 +2088,7 @@ export const VerificarAsistenciaCitaCristal = async (req, res) => {
             console.log(`\nProcesando: ${paciente.tipo} ${paciente.numero} - ${paciente.eps} - Fecha: ${paciente.fechaCita}`);
 
             try {
-              await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}/patients`, {
+              await pageMozartia.goto(`https://salud.mozartai.com.co/${tenant}/patients`, {
                 waitUntil: "networkidle",
               });
               await pageMozartia.waitForTimeout(1500);
@@ -2296,7 +2296,7 @@ export const descargarAutorizacionEsperanza = async (req, res) => {
     contextGlobal = browser.contexts()[0];
     pageMozartia = await contextGlobal.newPage();
 
-    await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}`, {
+    await pageMozartia.goto(`https://salud.mozartai.com.co/${tenant}`, {
       waitUntil: "networkidle",
     });
 
@@ -2324,7 +2324,7 @@ export const descargarAutorizacionEsperanza = async (req, res) => {
     await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
 
     await pageMozartia.goto(
-      `https://new.app.mozartia.com/${tenant}/medical-authorizations`,
+      `https://salud.mozartai.com.co/${tenant}/medical-authorizations`,
       { waitUntil: "networkidle" }
     );
 
