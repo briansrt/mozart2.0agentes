@@ -242,7 +242,7 @@ export const descargarAutorizacion = async (req, res) => {
         contextGlobal = browser.contexts()[0];
         pageMozartia = await contextGlobal.newPage();
 
-        await pageMozartia.goto(`https://new.app.mozartia.com/${tenant}`, {
+        await pageMozartia.goto(`https://salud.mozartai.com.co/${tenant}`, {
           waitUntil: "networkidle",
         });
 
@@ -271,7 +271,7 @@ export const descargarAutorizacion = async (req, res) => {
         await pageMozartia.getByRole("button", { name: /Aceptar/i }).click();
 
         await pageMozartia.goto(
-          `https://new.app.mozartia.com/${tenant}/medical-authorizations`,
+          `https://salud.mozartai.com.co/${tenant}/medical-authorizations`,
           { waitUntil: "networkidle" },
         );
 
@@ -310,6 +310,9 @@ export const descargarAutorizacion = async (req, res) => {
           .waitFor({ state: "visible", timeout: 15000 });
 
         await cargarBtn.click();
+
+        await page.waitForTimeout(2000);
+        
         console.log("✅ Excel subido a Mozart");
       } catch (error) {
         console.error("Error en proceso asíncrono:", error);
